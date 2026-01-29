@@ -4,7 +4,6 @@ FROM node:20-slim
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
-    # Playwright dependencies
     libnss3 \
     libnspr4 \
     libatk1.0-0 \
@@ -32,7 +31,7 @@ COPY package*.json ./
 # Install dependencies
 RUN npm install
 
-# Install Playwright browsers (Chromium only to save space)
+# Install Playwright browsers (Chromium only)
 RUN npx playwright install chromium
 
 # Copy source
