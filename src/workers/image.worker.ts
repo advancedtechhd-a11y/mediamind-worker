@@ -44,6 +44,11 @@ export async function processImageResearch(projectId: string, topic: string, max
       }
     }
 
+    // Update project counts
+    await supabase.from('projects').update({
+      image_count: saved,
+    }).eq('id', projectId);
+
     console.log(`[Image] Done: ${saved} images`);
     return { success: true, count: saved };
 

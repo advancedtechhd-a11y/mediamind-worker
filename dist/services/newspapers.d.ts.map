@@ -1,0 +1,1 @@
+{"version":3,"file":"newspapers.d.ts","sourceRoot":"","sources":["../../src/services/newspapers.ts"],"names":[],"mappings":"AAKA,UAAU,eAAe;IACvB,GAAG,EAAE,MAAM,CAAC;IACZ,KAAK,EAAE,MAAM,CAAC;IACd,MAAM,EAAE,MAAM,CAAC;IACf,IAAI,CAAC,EAAE,MAAM,CAAC;IACd,WAAW,CAAC,EAAE,MAAM,CAAC;CACtB;AAMD,wBAAsB,0BAA0B,CAC9C,KAAK,EAAE,MAAM,EACb,UAAU,GAAE,MAAW,GACtB,OAAO,CAAC,eAAe,EAAE,CAAC,CAiB5B"}

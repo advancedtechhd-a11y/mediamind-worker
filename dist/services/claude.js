@@ -1,0 +1,230 @@
+// Claude Service
+// Analyzes transcripts and frames to find relevant content
+import Anthropic from '@anthropic-ai/sdk';
+import axios from 'axios';
+import fs from 'fs';
+const anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+});
+// ============================================
+// ANALYZE TRANSCRIPT FOR RELEVANT SEGMENTS
+// ============================================
+export async function analyzeTranscript(topic, transcript) {
+    try {
+        // Format transcript with timestamps
+        const transcriptText = transcript
+            .map(seg => `[${formatTime(seg.start)} - ${formatTime(seg.end)}] ${seg.text}`)
+            .join('\n');
+        const prompt = `You are analyzing a video transcript to find segments relevant to the topic: "${topic}"
+
+Here is the transcript with timestamps:
+
+${transcriptText}
+
+Find ALL segments that discuss or relate to "${topic}". For each relevant segment:
+1. Identify the start and end timestamps
+2. Write a brief description of what that segment discusses
+3. Rate its relevance from 0.0 to 1.0 (1.0 = directly about the topic, 0.5 = tangentially related)
+
+Only include segments with relevance >= 0.5
+
+Respond in JSON format:
+{
+  "segments": [
+    {
+      "start_seconds": 30,
+      "end_seconds": 75,
+      "description": "Description of what this segment covers",
+      "relevance_score": 0.9
+    }
+  ]
+}
+
+If no relevant segments found, return: { "segments": [] }`;
+        const response = await anthropic.messages.create({
+            model: 'claude-3-haiku-20240307',
+            max_tokens: 2000,
+            messages: [{ role: 'user', content: prompt }],
+        });
+        const text = response.content[0].type === 'text' ? response.content[0].text : '';
+        // Parse JSON response
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            console.error(`      Could not parse Claude response`);
+            return [];
+        }
+        const parsed = JSON.parse(jsonMatch[0]);
+        const segments = (parsed.segments || []).map((seg) => ({
+            start: seg.start_seconds,
+            end: seg.end_seconds,
+            description: seg.description,
+            relevanceScore: seg.relevance_score,
+        }));
+        return segments;
+    }
+    catch (error) {
+        console.error(`      Claude transcript analysis failed: ${error.message}`);
+        return [];
+    }
+}
+// ============================================
+// ANALYZE FRAMES FOR RELEVANT CONTENT
+// ============================================
+export async function analyzeFrames(topic, framePaths) {
+    try {
+        // Limit to max 20 frames to control costs
+        const framesToAnalyze = framePaths.slice(0, 20);
+        const frameInterval = framePaths.length > 20
+            ? Math.floor(framePaths.length / 20)
+            : 1;
+        console.log(`      Analyzing ${framesToAnalyze.length} frames...`);
+        // Convert frames to base64
+        const frameImages = framesToAnalyze.map((framePath, idx) => {
+            const imageData = fs.readFileSync(framePath);
+            const base64 = imageData.toString('base64');
+            return {
+                type: 'image',
+                source: {
+                    type: 'base64',
+                    media_type: 'image/jpeg',
+                    data: base64,
+                },
+            };
+        });
+        // Create content array with text prompt and images
+        const content = [
+            {
+                type: 'text',
+                text: `You are analyzing video frames to find content relevant to: "${topic}"
+
+These are ${framesToAnalyze.length} frames from a video, taken at regular intervals.
+Frame 1 = start of video, Frame ${framesToAnalyze.length} = near the end.
+
+Analyze all frames and identify ranges where the content is relevant to "${topic}".
+
+For each relevant range:
+1. Identify start and end frame numbers
+2. Describe what's shown in those frames
+3. Rate relevance from 0.0 to 1.0
+
+Only include ranges with relevance >= 0.5
+
+Respond in JSON:
+{
+  "ranges": [
+    {
+      "start_frame": 3,
+      "end_frame": 7,
+      "description": "Shows ancient Roman architecture",
+      "relevance_score": 0.85
+    }
+  ]
+}
+
+If nothing relevant, return: { "ranges": [] }`,
+            },
+            ...frameImages,
+        ];
+        const response = await anthropic.messages.create({
+            model: 'claude-3-haiku-20240307',
+            max_tokens: 2000,
+            messages: [{ role: 'user', content }],
+        });
+        const text = response.content[0].type === 'text' ? response.content[0].text : '';
+        // Parse JSON response
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            console.error(`      Could not parse Claude response`);
+            return [];
+        }
+        const parsed = JSON.parse(jsonMatch[0]);
+        // Convert frame ranges to time ranges
+        // Assuming 5 seconds per frame (based on extraction interval)
+        const SECONDS_PER_FRAME = 5;
+        const segments = (parsed.ranges || []).map((range) => ({
+            start: (range.start_frame - 1) * SECONDS_PER_FRAME * frameInterval,
+            end: range.end_frame * SECONDS_PER_FRAME * frameInterval,
+            description: range.description,
+            relevanceScore: range.relevance_score,
+        }));
+        return segments;
+    }
+    catch (error) {
+        console.error(`      Claude frame analysis failed: ${error.message}`);
+        return [];
+    }
+}
+// ============================================
+// VALIDATE IMAGE RELEVANCE
+// ============================================
+export async function validateImageRelevance(topic, imageUrl) {
+    try {
+        // Download image and convert to base64
+        const imageResponse = await axios.get(imageUrl, {
+            responseType: 'arraybuffer',
+            timeout: 30000,
+        });
+        const base64 = Buffer.from(imageResponse.data).toString('base64');
+        // Detect media type from content-type header or URL
+        let mediaType = 'image/jpeg';
+        const contentType = imageResponse.headers['content-type'];
+        if (contentType?.includes('png'))
+            mediaType = 'image/png';
+        else if (contentType?.includes('gif'))
+            mediaType = 'image/gif';
+        else if (contentType?.includes('webp'))
+            mediaType = 'image/webp';
+        const response = await anthropic.messages.create({
+            model: 'claude-3-haiku-20240307',
+            max_tokens: 500,
+            messages: [{
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'image',
+                            source: {
+                                type: 'base64',
+                                media_type: mediaType,
+                                data: base64,
+                            },
+                        },
+                        {
+                            type: 'text',
+                            text: `Is this image relevant to the topic: "${topic}"?
+
+Respond in JSON:
+{
+  "relevant": true/false,
+  "score": 0.0-1.0,
+  "description": "Brief description of what the image shows"
+}`,
+                        },
+                    ],
+                }],
+        });
+        const text = response.content[0].type === 'text' ? response.content[0].text : '';
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            return {
+                relevant: parsed.relevant === true && parsed.score >= 0.5,
+                score: parsed.score || 0,
+                description: parsed.description || '',
+            };
+        }
+        return { relevant: false, score: 0, description: '' };
+    }
+    catch (error) {
+        console.error(`      Image validation failed: ${error.message}`);
+        return { relevant: false, score: 0, description: '' };
+    }
+}
+// ============================================
+// HELPERS
+// ============================================
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+//# sourceMappingURL=claude.js.map
