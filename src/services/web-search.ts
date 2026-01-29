@@ -618,15 +618,20 @@ export async function searchWebForNews(
 
     const news = response.data?.news || [];
     for (const n of news) {
+      const domain = extractDomain(n.link);
+      // Skip excluded sites
+      if (EXCLUDED_VIDEO_SITES.some(s => domain.includes(s.replace('www.', '')))) {
+        continue;
+      }
       results.push({
         url: n.link,
         title: n.title,
-        source: n.source || extractDomain(n.link),
+        source: n.source || domain,
         snippet: n.snippet,
         date: n.date,
       });
     }
-    console.log(`[Serper] Found ${news.length} news articles`);
+    console.log(`[Serper] Found ${results.length} news articles (filtered)`);
 
     // Step 2: General article search
     console.log(`[Serper] Searching articles for "${topic}"...`);
@@ -644,11 +649,16 @@ export async function searchWebForNews(
 
     const organic = articleResponse.data?.organic || [];
     for (const o of organic) {
+      const domain = extractDomain(o.link);
+      // Skip excluded sites
+      if (EXCLUDED_VIDEO_SITES.some(s => domain.includes(s.replace('www.', '')))) {
+        continue;
+      }
       if (!results.find(r => r.url === o.link)) {
         results.push({
           url: o.link,
           title: o.title,
-          source: extractDomain(o.link),
+          source: domain,
           snippet: o.snippet,
         });
       }
