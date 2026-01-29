@@ -1,16 +1,96 @@
-// MediaMind News Worker - Simplified (No Playwright required)
+// MediaMind News Worker - With Playwright Screenshots
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
+import { chromium, Browser } from 'playwright';
 import { searchWebForNews, searchHistoricalNewspapers } from '../services/web-search.js';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
+
+// Take screenshot of a URL
+async function takeScreenshot(browser: Browser, url: string, outputPath: string): Promise<boolean> {
+  const page = await browser.newPage();
+  try {
+    // Set viewport for consistent screenshots
+    await page.setViewportSize({ width: 1280, height: 800 });
+
+    // Navigate with timeout
+    await page.goto(url, {
+      waitUntil: 'domcontentloaded',
+      timeout: 15000
+    });
+
+    // Wait a bit for content to load
+    await page.waitForTimeout(2000);
+
+    // Take screenshot
+    await page.screenshot({
+      path: outputPath,
+      fullPage: false, // Just viewport, not full page
+      type: 'jpeg',
+      quality: 85
+    });
+
+    return true;
+  } catch (e: any) {
+    console.error(`[News] Screenshot failed for ${url}: ${e.message}`);
+    return false;
+  } finally {
+    await page.close();
+  }
+}
+
+// Upload screenshot to Supabase
+async function uploadScreenshot(filePath: string, storagePath: string): Promise<string | null> {
+  try {
+    const fileBuffer = fs.readFileSync(filePath);
+
+    const { error } = await supabase.storage
+      .from('mediamind')
+      .upload(storagePath, fileBuffer, {
+        contentType: 'image/jpeg',
+        upsert: true
+      });
+
+    if (error) {
+      console.error(`[News] Upload error: ${error.message}`);
+      return null;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('mediamind')
+      .getPublicUrl(storagePath);
+
+    // Clean up local file
+    fs.unlinkSync(filePath);
+
+    return publicUrl;
+  } catch (e: any) {
+    console.error(`[News] Upload failed: ${e.message}`);
+    return null;
+  }
+}
 
 export async function processNewsResearch(projectId: string, topic: string, maxResults: number) {
   console.log(`\n[News] Starting: "${topic}"`);
 
   let saved = 0;
+  let browser: Browser | null = null;
+
+  // Create temp directory for screenshots
+  const tempDir = `/tmp/mediamind/${projectId}/screenshots`;
+  fs.mkdirSync(tempDir, { recursive: true });
 
   try {
+    // Launch browser once for all screenshots
+    console.log('[News] Launching browser...');
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    console.log('[News] Browser ready');
+
     // Historical newspapers (from Serper -> Archive.org/LOC)
     const newspapers = await searchHistoricalNewspapers(topic, Math.ceil(maxResults / 2));
     console.log(`[News] Found ${newspapers.length} newspapers`);
@@ -20,6 +100,21 @@ export async function processNewsResearch(projectId: string, topic: string, maxR
 
       try {
         const newsId = uuidv4();
+        let hostedUrl = paper.imageUrl || paper.url;
+
+        // If no image URL, take screenshot
+        if (!paper.imageUrl && browser) {
+          const screenshotPath = path.join(tempDir, `${newsId}.jpg`);
+          const success = await takeScreenshot(browser, paper.url, screenshotPath);
+
+          if (success) {
+            const storagePath = `news/${projectId}/${newsId}.jpg`;
+            const uploadedUrl = await uploadScreenshot(screenshotPath, storagePath);
+            if (uploadedUrl) {
+              hostedUrl = uploadedUrl;
+            }
+          }
+        }
 
         await supabase.from('media').insert({
           id: newsId,
@@ -28,7 +123,8 @@ export async function processNewsResearch(projectId: string, topic: string, maxR
           title: paper.title,
           source: paper.source,
           source_url: paper.url,
-          hosted_url: paper.imageUrl || paper.url, // Use image URL if available
+          hosted_url: hostedUrl,
+          storage_path: hostedUrl.includes('supabase') ? `news/${projectId}/${newsId}.jpg` : null,
           metadata: {
             date: paper.date,
             snippet: paper.snippet,
@@ -52,19 +148,35 @@ export async function processNewsResearch(projectId: string, topic: string, maxR
 
       try {
         const newsId = uuidv4();
+        let hostedUrl = article.url;
+
+        // Take screenshot of article
+        if (browser) {
+          const screenshotPath = path.join(tempDir, `${newsId}.jpg`);
+          const success = await takeScreenshot(browser, article.url, screenshotPath);
+
+          if (success) {
+            const storagePath = `news/${projectId}/${newsId}.jpg`;
+            const uploadedUrl = await uploadScreenshot(screenshotPath, storagePath);
+            if (uploadedUrl) {
+              hostedUrl = uploadedUrl;
+              console.log(`[News] Screenshot saved: ${article.title?.slice(0, 30)}...`);
+            }
+          }
+        }
 
         await supabase.from('media').insert({
           id: newsId,
           project_id: projectId,
-          type: 'article_screenshot', // We'll show it as article card
+          type: 'article_screenshot',
           title: article.title,
           source: article.source,
           source_url: article.url,
-          hosted_url: article.url, // Link to original article
+          hosted_url: hostedUrl,
+          storage_path: hostedUrl.includes('supabase') ? `news/${projectId}/${newsId}.jpg` : null,
           metadata: {
             date: article.date,
             snippet: article.snippet,
-            needs_screenshot: true, // Flag for later processing
           },
         });
 
@@ -87,5 +199,16 @@ export async function processNewsResearch(projectId: string, topic: string, maxR
   } catch (e: any) {
     console.error(`[News] Fatal: ${e.message}`);
     return { success: false, error: e.message };
+  } finally {
+    // Always close browser
+    if (browser) {
+      await browser.close();
+      console.log('[News] Browser closed');
+    }
+
+    // Clean up temp directory
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch {}
   }
 }

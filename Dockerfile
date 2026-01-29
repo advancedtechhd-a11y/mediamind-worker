@@ -1,15 +1,27 @@
 FROM node:20-slim
 
-# Install ffmpeg, yt-dlp, and deno (required for YouTube)
+# Install ffmpeg and Playwright dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    python3 \
-    python3-pip \
     curl \
-    unzip \
-    && pip3 install --break-system-packages yt-dlp \
-    && curl -fsSL https://deno.land/install.sh | sh \
-    && mv /root/.deno/bin/deno /usr/local/bin/ \
+    # Playwright dependencies
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libatspi2.0-0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpango-1.0-0 \
+    libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -19,6 +31,9 @@ COPY package*.json ./
 
 # Install dependencies
 RUN npm install
+
+# Install Playwright browsers (Chromium only to save space)
+RUN npx playwright install chromium
 
 # Copy source
 COPY . .
