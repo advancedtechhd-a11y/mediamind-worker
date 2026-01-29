@@ -52,9 +52,15 @@ export async function searchWebForVideos(
   const results: VideoSearchResult[] = [];
 
   try {
-    // Search Archive.org via Serper (Google) - no rate limits!
-    console.log(`[WebSearch] Searching Archive.org via Serper for: ${topic}`);
-    const archiveResults = await searchArchiveViaSerper(topic, 'video');
+    // Run searches in parallel for speed
+    const [archiveResults, pexelsResults, pixabayResults, nasaResults] = await Promise.all([
+      searchArchiveViaSerper(topic, 'video').catch(() => []),
+      searchPexelsVideos(topic).catch(() => []),
+      searchPixabayVideos(topic).catch(() => []),
+      searchNASAVideos(topic).catch(() => []),
+    ]);
+
+    // Add Archive.org results (historical)
     for (const r of archiveResults) {
       if (!results.find(existing => existing.url === r.url)) {
         results.push(r);
@@ -62,14 +68,29 @@ export async function searchWebForVideos(
     }
     console.log(`[WebSearch] Found ${archiveResults.length} Archive.org videos`);
 
-    // Search Pexels for stock videos (modern footage)
-    const pexelsResults = await searchPexelsVideos(topic);
+    // Add NASA results (space/science)
+    for (const r of nasaResults) {
+      if (!results.find(existing => existing.url === r.url)) {
+        results.push(r);
+      }
+    }
+    console.log(`[WebSearch] Found ${nasaResults.length} NASA videos`);
+
+    // Add Pexels results (modern stock)
     for (const r of pexelsResults) {
       if (!results.find(existing => existing.url === r.url)) {
         results.push(r);
       }
     }
     console.log(`[WebSearch] Found ${pexelsResults.length} Pexels videos`);
+
+    // Add Pixabay results (modern stock)
+    for (const r of pixabayResults) {
+      if (!results.find(existing => existing.url === r.url)) {
+        results.push(r);
+      }
+    }
+    console.log(`[WebSearch] Found ${pixabayResults.length} Pixabay videos`);
 
   } catch (error: any) {
     console.error(`[WebSearch] Video search failed:`, error.message);
@@ -112,6 +133,76 @@ async function searchPexelsVideos(query: string): Promise<VideoSearchResult[]> {
     }).filter((v: VideoSearchResult) => v.url);
   } catch (error: any) {
     console.error(`[Pexels] Video search failed:`, error.message);
+    return [];
+  }
+}
+
+// Pixabay Video Search
+async function searchPixabayVideos(query: string): Promise<VideoSearchResult[]> {
+  const apiKey = process.env.PIXABAY_API_KEY;
+  if (!apiKey) {
+    console.log(`[Pixabay] API key not set, skipping video search`);
+    return [];
+  }
+
+  try {
+    const response = await axios.get(
+      `https://pixabay.com/api/videos/?key=${apiKey}&q=${encodeURIComponent(query)}&per_page=10`,
+      { timeout: 15000 }
+    );
+
+    const videos = response.data?.hits || [];
+    return videos.map((v: any) => ({
+      url: v.videos?.medium?.url || v.videos?.small?.url || '',
+      title: v.tags || query,
+      source: 'pixabay',
+      duration: v.duration,
+      thumbnail: `https://i.vimeocdn.com/video/${v.picture_id}_640x360.jpg`,
+    })).filter((v: VideoSearchResult) => v.url);
+  } catch (error: any) {
+    console.error(`[Pixabay] Video search failed:`, error.message);
+    return [];
+  }
+}
+
+// NASA Video Search
+async function searchNASAVideos(query: string): Promise<VideoSearchResult[]> {
+  try {
+    const response = await axios.get(
+      `https://images-api.nasa.gov/search?q=${encodeURIComponent(query)}&media_type=video`,
+      { timeout: 15000 }
+    );
+
+    const items = response.data?.collection?.items || [];
+    const results: VideoSearchResult[] = [];
+
+    for (const item of items.slice(0, 10)) {
+      try {
+        // NASA returns a href to the asset manifest
+        const assetResponse = await axios.get(item.href, { timeout: 10000 });
+        const assets = assetResponse.data || [];
+
+        // Find the MP4 file (prefer smaller sizes)
+        const mp4 = assets.find((a: string) => a.includes('~medium.mp4'))
+          || assets.find((a: string) => a.includes('~small.mp4'))
+          || assets.find((a: string) => a.endsWith('.mp4'));
+
+        if (mp4) {
+          results.push({
+            url: mp4,
+            title: item.data?.[0]?.title || query,
+            source: 'nasa',
+            thumbnail: item.links?.[0]?.href,
+          });
+        }
+      } catch (e) {
+        // Skip items with asset fetch errors
+      }
+    }
+
+    return results;
+  } catch (error: any) {
+    console.error(`[NASA] Video search failed:`, error.message);
     return [];
   }
 }
@@ -350,39 +441,57 @@ export async function searchWebForImages(
   const results: ImageSearchResult[] = [];
 
   try {
-    // 1. Archive.org historical images via Serper (most valuable for documentaries)
-    console.log(`[WebSearch] Searching Archive.org images via Serper for: ${topic}`);
-    const archiveResults = await searchArchiveImagesViaSerper(topic);
+    // Run all image searches in parallel for speed
+    const [archiveResults, nasaResults, serperResults, wikiResults, pexelsResults, pixabayResults, unsplashResults] = await Promise.all([
+      searchArchiveImagesViaSerper(topic).catch(() => []),
+      searchNASAImages(topic).catch(() => []),
+      searchSerperImages(`${topic} historical photo`).catch(() => []),
+      searchWikimediaImages(topic).catch(() => []),
+      searchPexelsImages(topic).catch(() => []),
+      searchPixabayImages(topic).catch(() => []),
+      searchUnsplashImages(topic).catch(() => []),
+    ]);
+
+    // Add Archive.org results (historical)
     for (const r of archiveResults) {
-      if (!results.find(existing => existing.url === r.url)) {
-        results.push(r);
-      }
+      if (!results.find(existing => existing.url === r.url)) results.push(r);
     }
     console.log(`[WebSearch] Found ${archiveResults.length} Archive.org images`);
 
-    // 2. Serper general image search (finds images across the web)
-    const serperResults = await searchSerperImages(`${topic} historical photo`);
+    // Add NASA results (space/science)
+    for (const r of nasaResults) {
+      if (!results.find(existing => existing.url === r.url)) results.push(r);
+    }
+    console.log(`[WebSearch] Found ${nasaResults.length} NASA images`);
+
+    // Add Serper general results
     for (const r of serperResults) {
-      if (!results.find(existing => existing.url === r.url)) {
-        results.push(r);
-      }
+      if (!results.find(existing => existing.url === r.url)) results.push(r);
     }
 
-    // 3. Wikimedia Commons (public domain images)
-    const wikiResults = await searchWikimediaImages(topic);
+    // Add Wikimedia results (public domain)
     for (const r of wikiResults) {
-      if (!results.find(existing => existing.url === r.url)) {
-        results.push(r);
-      }
+      if (!results.find(existing => existing.url === r.url)) results.push(r);
     }
+    console.log(`[WebSearch] Found ${wikiResults.length} Wikimedia images`);
 
-    // 4. Pexels (modern stock photos)
-    const pexelsResults = await searchPexelsImages(topic);
+    // Add Pexels results (modern stock)
     for (const r of pexelsResults) {
-      if (!results.find(existing => existing.url === r.url)) {
-        results.push(r);
-      }
+      if (!results.find(existing => existing.url === r.url)) results.push(r);
     }
+    console.log(`[WebSearch] Found ${pexelsResults.length} Pexels images`);
+
+    // Add Pixabay results (modern stock)
+    for (const r of pixabayResults) {
+      if (!results.find(existing => existing.url === r.url)) results.push(r);
+    }
+    console.log(`[WebSearch] Found ${pixabayResults.length} Pixabay images`);
+
+    // Add Unsplash results (modern stock)
+    for (const r of unsplashResults) {
+      if (!results.find(existing => existing.url === r.url)) results.push(r);
+    }
+    console.log(`[WebSearch] Found ${unsplashResults.length} Unsplash images`);
 
   } catch (error: any) {
     console.error(`[WebSearch] Image search failed:`, error.message);
@@ -553,6 +662,88 @@ async function searchPexelsImages(query: string): Promise<ImageSearchResult[]> {
     }));
   } catch (error: any) {
     console.error(`[Pexels] Image search failed:`, error.message);
+    return [];
+  }
+}
+
+// NASA Image Search
+async function searchNASAImages(query: string): Promise<ImageSearchResult[]> {
+  try {
+    const response = await axios.get(
+      `https://images-api.nasa.gov/search?q=${encodeURIComponent(query)}&media_type=image`,
+      { timeout: 15000 }
+    );
+
+    const items = response.data?.collection?.items || [];
+    return items.slice(0, 15).map((item: any) => ({
+      url: item.links?.[0]?.href || '',
+      title: item.data?.[0]?.title || query,
+      source: 'nasa',
+      thumbnail: item.links?.[0]?.href,
+    })).filter((img: ImageSearchResult) => img.url);
+  } catch (error: any) {
+    console.error(`[NASA] Image search failed:`, error.message);
+    return [];
+  }
+}
+
+// Pixabay Image Search
+async function searchPixabayImages(query: string): Promise<ImageSearchResult[]> {
+  const apiKey = process.env.PIXABAY_API_KEY;
+  if (!apiKey) {
+    console.log(`[Pixabay] API key not set, skipping image search`);
+    return [];
+  }
+
+  try {
+    const response = await axios.get(
+      `https://pixabay.com/api/?key=${apiKey}&q=${encodeURIComponent(query)}&per_page=10&image_type=photo`,
+      { timeout: 15000 }
+    );
+
+    const hits = response.data?.hits || [];
+    return hits.map((img: any) => ({
+      url: img.largeImageURL || img.webformatURL,
+      title: img.tags || query,
+      source: 'pixabay',
+      width: img.imageWidth,
+      height: img.imageHeight,
+      thumbnail: img.previewURL,
+    }));
+  } catch (error: any) {
+    console.error(`[Pixabay] Image search failed:`, error.message);
+    return [];
+  }
+}
+
+// Unsplash Image Search
+async function searchUnsplashImages(query: string): Promise<ImageSearchResult[]> {
+  const accessKey = process.env.UNSPLASH_ACCESS_KEY;
+  if (!accessKey) {
+    console.log(`[Unsplash] API key not set, skipping image search`);
+    return [];
+  }
+
+  try {
+    const response = await axios.get(
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=10`,
+      {
+        headers: { Authorization: `Client-ID ${accessKey}` },
+        timeout: 15000,
+      }
+    );
+
+    const results = response.data?.results || [];
+    return results.map((img: any) => ({
+      url: img.urls?.regular || img.urls?.full,
+      title: img.description || img.alt_description || query,
+      source: 'unsplash',
+      width: img.width,
+      height: img.height,
+      thumbnail: img.urls?.thumb,
+    }));
+  } catch (error: any) {
+    console.error(`[Unsplash] Image search failed:`, error.message);
     return [];
   }
 }
