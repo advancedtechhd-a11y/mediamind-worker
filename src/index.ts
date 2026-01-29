@@ -16,6 +16,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 );
 
+// Track active jobs for cancellation
+const activeJobs = new Map<string, { cancelled: boolean }>();
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -59,6 +62,9 @@ app.post('/v1/research', async (req, res) => {
       started_at: new Date().toISOString(),
     });
 
+    // Register job for cancellation tracking
+    activeJobs.set(projectId, { cancelled: false });
+
     // Return immediately, process in background
     res.json({
       success: true,
@@ -75,23 +81,52 @@ app.post('/v1/research', async (req, res) => {
       processVideoResearch(projectId, topic, maxVideos),
       processNewsResearch(projectId, topic, maxNews),
     ]).then(async () => {
+      const job = activeJobs.get(projectId);
+      if (job?.cancelled) {
+        console.log(`\n[Research] Cancelled: ${projectId}\n`);
+        return;
+      }
       await supabase.from('projects').update({
         status: 'completed',
         completed_at: new Date().toISOString(),
       }).eq('id', projectId);
       console.log(`\n[Research] Completed: ${projectId}\n`);
     }).catch(async (err) => {
+      const job = activeJobs.get(projectId);
+      if (job?.cancelled) return;
       await supabase.from('projects').update({
         status: 'failed',
         error_message: err.message,
       }).eq('id', projectId);
       console.error(`[Research] Failed: ${err.message}`);
+    }).finally(() => {
+      activeJobs.delete(projectId);
     });
 
   } catch (error: any) {
     console.error(`[Research] Error:`, error);
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// DELETE /v1/project/:id - Cancel/Stop a research
+app.delete('/v1/project/:id', async (req, res) => {
+  const { id } = req.params;
+
+  // Mark job as cancelled
+  const job = activeJobs.get(id);
+  if (job) {
+    job.cancelled = true;
+    console.log(`[Research] Cancelling job: ${id}`);
+  }
+
+  // Update project status
+  await supabase.from('projects').update({
+    status: 'cancelled',
+    error_message: 'Cancelled by user',
+  }).eq('id', id);
+
+  res.json({ success: true, message: 'Research cancelled' });
 });
 
 // POST /v1/videos - Videos only
