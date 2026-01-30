@@ -53,7 +53,7 @@ async function searchArchiveOrg(topic: string, queries: string[]) {
               priority: 1,
             });
           }
-        } catch (e) {}
+        } catch (e: any) { console.error(`[Video] Error: ${e.message}`); }
       }
     } catch (e: any) {
       console.log(`[Video] Archive.org query failed: ${e.message}`);
@@ -85,7 +85,7 @@ async function searchWikimedia(topic: string, queries: string[]) {
           priority: 2,
         });
       }
-    } catch (e) {}
+    } catch (e: any) { console.error(`[Video] Error: ${e.message}`); }
   }
 
   console.log(`[Video] Wikimedia found: ${results.length}`);
@@ -121,7 +121,7 @@ async function searchHistoricalArchives(topic: string, queries: string[]) {
             priority: 3,
           });
         }
-      } catch (e) {}
+      } catch (e: any) { console.error(`[Video] Error: ${e.message}`); }
     }
   }
 
@@ -156,7 +156,7 @@ async function searchEntireWeb(topic: string, queries: string[]) {
           priority: 4,
         });
       }
-    } catch (e) {}
+    } catch (e: any) { console.error(`[Video] Error: ${e.message}`); }
   }
 
   console.log(`[Video] Web search found: ${results.length}`);
@@ -214,7 +214,7 @@ app.post('/search', async (req, res) => {
             metadata: { thumbnail: video.thumbnail, priority: video.priority },
           });
           saved++;
-        } catch (e) {}
+        } catch (e: any) { console.error(`[Video] Error: ${e.message}`); }
       }
       console.log(`[Video Worker] Saved ${saved} videos to database`);
     }

@@ -53,7 +53,7 @@ async function searchArchiveOrg(topic: string, queries: string[]) {
               priority: 1,
             });
           }
-        } catch (e) {}
+        } catch (e: any) { console.error(`[Image] Error: ${e.message}`); }
       }
     } catch (e: any) {
       console.log(`[Image] Archive.org query failed: ${e.message}`);
@@ -85,7 +85,9 @@ async function searchWikimedia(topic: string, queries: string[]) {
           priority: 2,
         });
       }
-    } catch (e) {}
+    } catch (e: any) {
+      console.error(`[Image] Wikimedia search error: ${e.message}`);
+    }
   }
 
   console.log(`[Image] Wikimedia found: ${results.length}`);
@@ -116,7 +118,7 @@ async function searchGoogleImages(topic: string, queries: string[]) {
           priority: 3,
         });
       }
-    } catch (e) {}
+    } catch (e: any) { console.error(`[Image] Error: ${e.message}`); }
   }
 
   console.log(`[Image] Google Images found: ${results.length}`);
@@ -144,7 +146,7 @@ async function searchFlickr(topic: string, queries: string[]) {
           priority: 4,
         });
       }
-    } catch (e) {}
+    } catch (e: any) { console.error(`[Image] Error: ${e.message}`); }
   }
 
   console.log(`[Image] Flickr found: ${results.length}`);
@@ -181,7 +183,7 @@ async function searchMuseums(topic: string, queries: string[]) {
             priority: 5,
           });
         }
-      } catch (e) {}
+      } catch (e: any) { console.error(`[Image] Error: ${e.message}`); }
     }
   }
 
@@ -212,7 +214,7 @@ async function searchEntireWeb(topic: string, queries: string[]) {
           priority: 6,
         });
       }
-    } catch (e) {}
+    } catch (e: any) { console.error(`[Image] Error: ${e.message}`); }
   }
 
   console.log(`[Image] Web search found: ${results.length}`);
@@ -272,7 +274,7 @@ app.post('/search', async (req, res) => {
             metadata: { width: image.width, height: image.height, priority: image.priority },
           });
           saved++;
-        } catch (e) {}
+        } catch (e: any) { console.error(`[Image] Error: ${e.message}`); }
       }
       console.log(`[Image Worker] Saved ${saved} images to database`);
     }

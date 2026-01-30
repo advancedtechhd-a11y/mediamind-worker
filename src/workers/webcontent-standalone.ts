@@ -111,7 +111,7 @@ async function searchNews(topic: string, queries: string[]) {
           type: 'news',
         });
       }
-    } catch (e) {}
+    } catch (e: any) { console.error(`[WebContent] Error: ${e.message}`); }
   }
 
   console.log(`[WebContent] News found: ${results.length}`);
@@ -146,7 +146,7 @@ async function searchHistoricalNewspapers(topic: string, queries: string[]) {
             type: 'newspaper',
           });
         }
-      } catch (e) {}
+      } catch (e: any) { console.error(`[WebContent] Error: ${e.message}`); }
     }
   }
 
@@ -177,7 +177,7 @@ async function searchBlogsAndArticles(topic: string, queries: string[]) {
           type: 'article',
         });
       }
-    } catch (e) {}
+    } catch (e: any) { console.error(`[WebContent] Error: ${e.message}`); }
   }
 
   console.log(`[WebContent] Blogs/articles found: ${results.length}`);
@@ -220,7 +220,7 @@ async function searchAuthoritativeSources(topic: string, queries: string[]) {
             type: 'authoritative',
           });
         }
-      } catch (e) {}
+      } catch (e: any) { console.error(`[WebContent] Error: ${e.message}`); }
     }
   }
 
@@ -263,7 +263,7 @@ async function searchTopicSpecificSites(topic: string, queries: string[], topicT
             type: 'topic_specific',
           });
         }
-      } catch (e) {}
+      } catch (e: any) { console.error(`[WebContent] Error: ${e.message}`); }
     }
   }
 
@@ -339,7 +339,7 @@ app.post('/search', async (req, res) => {
 
           saved++;
           console.log(`[WebContent] Saved ${saved}/${maxScreenshots}: ${page.source}`);
-        } catch (e) {}
+        } catch (e: any) { console.error(`[WebContent] Error: ${e.message}`); }
       }
 
       console.log(`[WebContent Worker] Saved ${saved} screenshots to database`);
