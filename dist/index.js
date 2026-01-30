@@ -53,9 +53,9 @@ app.post('/v1/research', async (req, res) => {
             project: { id: projectId, slug, topic, status: 'processing' },
         });
         // Process all in parallel (background)
-        const maxImages = options.max_images || 30;
-        const maxVideos = options.max_videos || 10;
-        const maxNews = options.max_news || 15;
+        const maxImages = options.max_images || 200;
+        const maxVideos = options.max_videos || 100;
+        const maxNews = options.max_news || 100;
         Promise.all([
             processImageResearch(projectId, topic, maxImages),
             processVideoResearch(projectId, topic, maxVideos),
