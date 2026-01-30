@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/orchestrator.ts",
     "build": "tsc",
-    "start": "node dist/orchestrator.js",
+    "start": "sh start-workers.sh",
     "start:orchestrator": "node dist/orchestrator.js",
     "start:video": "node dist/workers/video-standalone.js",
     "start:image": "node dist/workers/image-standalone.js",
