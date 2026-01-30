@@ -132,8 +132,9 @@ async function searchHistoricalNewspapers(topic: string, queries: string[]) {
     for (const query of queries.slice(0, 2)) {
       try {
         await delay(300);
+        const searchQuery = `site:${source.site} ${query}`;
         const response = await axios.post('https://google.serper.dev/search',
-          { q: `site:${source.site} "${query}"`, num: 20 },
+          { q: searchQuery, num: 20 },
           { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
         );
 
@@ -146,7 +147,10 @@ async function searchHistoricalNewspapers(topic: string, queries: string[]) {
             type: 'newspaper',
           });
         }
-      } catch (e: any) { console.error(`[WebContent] Error: ${e.message}`); }
+      } catch (e: any) {
+        console.error(`[WebContent] Newspaper (${source.name}) error: ${e.message}`);
+        if (e.response) console.error(`[WebContent] Response: ${JSON.stringify(e.response.data)}`);
+      }
     }
   }
 
@@ -162,8 +166,9 @@ async function searchBlogsAndArticles(topic: string, queries: string[]) {
   for (const query of queries) {
     try {
       await delay(300);
+      const searchQuery = `${query} blog OR article OR report OR analysis`;
       const response = await axios.post('https://google.serper.dev/search',
-        { q: `"${query}" blog OR article OR report OR analysis`, num: 30 },
+        { q: searchQuery, num: 30 },
         { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 15000 }
       );
 
@@ -177,7 +182,10 @@ async function searchBlogsAndArticles(topic: string, queries: string[]) {
           type: 'article',
         });
       }
-    } catch (e: any) { console.error(`[WebContent] Error: ${e.message}`); }
+    } catch (e: any) {
+      console.error(`[WebContent] Blogs/articles error: ${e.message}`);
+      if (e.response) console.error(`[WebContent] Response: ${JSON.stringify(e.response.data)}`);
+    }
   }
 
   console.log(`[WebContent] Blogs/articles found: ${results.length}`);
@@ -203,8 +211,9 @@ async function searchAuthoritativeSources(topic: string, queries: string[]) {
     for (const query of queries.slice(0, 2)) {
       try {
         await delay(300);
+        const searchQuery = `site:${site} ${query}`;
         const response = await axios.post('https://google.serper.dev/search',
-          { q: `site:${site} "${query}"`, num: 10 },
+          { q: searchQuery, num: 10 },
           { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
         );
 
@@ -220,7 +229,10 @@ async function searchAuthoritativeSources(topic: string, queries: string[]) {
             type: 'authoritative',
           });
         }
-      } catch (e: any) { console.error(`[WebContent] Error: ${e.message}`); }
+      } catch (e: any) {
+        console.error(`[WebContent] Auth source (${site}) error: ${e.message}`);
+        if (e.response) console.error(`[WebContent] Response: ${JSON.stringify(e.response.data)}`);
+      }
     }
   }
 
@@ -249,8 +261,9 @@ async function searchTopicSpecificSites(topic: string, queries: string[], topicT
     for (const query of queries.slice(0, 2)) {
       try {
         await delay(300);
+        const searchQuery = `site:${site} ${query}`;
         const response = await axios.post('https://google.serper.dev/search',
-          { q: `site:${site} "${query}"`, num: 15 },
+          { q: searchQuery, num: 15 },
           { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
         );
 
@@ -263,7 +276,10 @@ async function searchTopicSpecificSites(topic: string, queries: string[], topicT
             type: 'topic_specific',
           });
         }
-      } catch (e: any) { console.error(`[WebContent] Error: ${e.message}`); }
+      } catch (e: any) {
+        console.error(`[WebContent] Topic-specific (${site}) error: ${e.message}`);
+        if (e.response) console.error(`[WebContent] Response: ${JSON.stringify(e.response.data)}`);
+      }
     }
   }
 

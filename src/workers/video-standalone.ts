@@ -72,8 +72,10 @@ async function searchWikimedia(topic: string, queries: string[]) {
   for (const query of queries) {
     try {
       await delay(300);
+      const searchQuery = `site:commons.wikimedia.org ${query} video OR film`;
+      console.log(`[Video] Wikimedia query: ${searchQuery}`);
       const response = await axios.post('https://google.serper.dev/search',
-        { q: `site:commons.wikimedia.org "${query}" video OR film`, num: 20 },
+        { q: searchQuery, num: 20 },
         { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
       );
 
@@ -85,7 +87,10 @@ async function searchWikimedia(topic: string, queries: string[]) {
           priority: 2,
         });
       }
-    } catch (e: any) { console.error(`[Video] Error: ${e.message}`); }
+    } catch (e: any) {
+      console.error(`[Video] Wikimedia error: ${e.message}`);
+      if (e.response) console.error(`[Video] Response: ${JSON.stringify(e.response.data)}`);
+    }
   }
 
   console.log(`[Video] Wikimedia found: ${results.length}`);
@@ -108,8 +113,9 @@ async function searchHistoricalArchives(topic: string, queries: string[]) {
     for (const query of queries.slice(0, 2)) {
       try {
         await delay(300);
+        const searchQuery = `site:${archive.site} ${query}`;
         const response = await axios.post('https://google.serper.dev/search',
-          { q: `site:${archive.site} "${query}"`, num: 15 },
+          { q: searchQuery, num: 15 },
           { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
         );
 
@@ -121,7 +127,10 @@ async function searchHistoricalArchives(topic: string, queries: string[]) {
             priority: 3,
           });
         }
-      } catch (e: any) { console.error(`[Video] Error: ${e.message}`); }
+      } catch (e: any) {
+        console.error(`[Video] Archive (${archive.name}) error: ${e.message}`);
+        if (e.response) console.error(`[Video] Response: ${JSON.stringify(e.response.data)}`);
+      }
     }
   }
 
@@ -140,8 +149,9 @@ async function searchEntireWeb(topic: string, queries: string[]) {
   for (const query of queries) {
     try {
       await delay(300);
+      const searchQuery = `${query} video OR footage OR documentary ${exclusions}`;
       const response = await axios.post('https://google.serper.dev/search',
-        { q: `"${query}" video OR footage OR documentary ${exclusions}`, num: 30 },
+        { q: searchQuery, num: 30 },
         { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 15000 }
       );
 
@@ -156,7 +166,10 @@ async function searchEntireWeb(topic: string, queries: string[]) {
           priority: 4,
         });
       }
-    } catch (e: any) { console.error(`[Video] Error: ${e.message}`); }
+    } catch (e: any) {
+      console.error(`[Video] Web search error: ${e.message}`);
+      if (e.response) console.error(`[Video] Response: ${JSON.stringify(e.response.data)}`);
+    }
   }
 
   console.log(`[Video] Web search found: ${results.length}`);

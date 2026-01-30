@@ -72,8 +72,10 @@ async function searchWikimedia(topic: string, queries: string[]) {
   for (const query of queries) {
     try {
       await delay(300);
+      const searchQuery = `site:commons.wikimedia.org ${query}`;
+      console.log(`[Image] Wikimedia query: ${searchQuery}`);
       const response = await axios.post('https://google.serper.dev/search',
-        { q: `site:commons.wikimedia.org "${query}"`, num: 30 },
+        { q: searchQuery, num: 30 },
         { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
       );
 
@@ -87,6 +89,10 @@ async function searchWikimedia(topic: string, queries: string[]) {
       }
     } catch (e: any) {
       console.error(`[Image] Wikimedia search error: ${e.message}`);
+      if (e.response) {
+        console.error(`[Image] Serper response status: ${e.response.status}`);
+        console.error(`[Image] Serper response data: ${JSON.stringify(e.response.data)}`);
+      }
     }
   }
 
@@ -133,8 +139,9 @@ async function searchFlickr(topic: string, queries: string[]) {
   for (const query of queries.slice(0, 3)) {
     try {
       await delay(300);
+      const searchQuery = `site:flickr.com ${query}`;
       const response = await axios.post('https://google.serper.dev/search',
-        { q: `site:flickr.com "${query}"`, num: 20 },
+        { q: searchQuery, num: 20 },
         { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
       );
 
@@ -146,7 +153,10 @@ async function searchFlickr(topic: string, queries: string[]) {
           priority: 4,
         });
       }
-    } catch (e: any) { console.error(`[Image] Error: ${e.message}`); }
+    } catch (e: any) {
+      console.error(`[Image] Flickr error: ${e.message}`);
+      if (e.response) console.error(`[Image] Response: ${JSON.stringify(e.response.data)}`);
+    }
   }
 
   console.log(`[Image] Flickr found: ${results.length}`);
@@ -170,8 +180,9 @@ async function searchMuseums(topic: string, queries: string[]) {
     for (const query of queries.slice(0, 2)) {
       try {
         await delay(300);
+        const searchQuery = `site:${site} ${query}`;
         const response = await axios.post('https://google.serper.dev/search',
-          { q: `site:${site} "${query}"`, num: 15 },
+          { q: searchQuery, num: 15 },
           { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
         );
 
@@ -183,7 +194,10 @@ async function searchMuseums(topic: string, queries: string[]) {
             priority: 5,
           });
         }
-      } catch (e: any) { console.error(`[Image] Error: ${e.message}`); }
+      } catch (e: any) {
+        console.error(`[Image] Museum (${site}) error: ${e.message}`);
+        if (e.response) console.error(`[Image] Response: ${JSON.stringify(e.response.data)}`);
+      }
     }
   }
 
