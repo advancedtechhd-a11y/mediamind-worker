@@ -609,6 +609,31 @@ export async function searchWebForNews(topic: string, _maxResults?: number): Pro
     console.log(`[News] Step 3: Searching authoritative sources...`);
     const authSources = ['history.com', 'britannica.com', 'wikipedia.org'];
 
+    // Filter out junk URLs (search pages, generic pages, tracking links)
+    const isJunkUrl = (url: string): boolean => {
+      const junkPatterns = [
+        '/search?', '/search/',           // Search pages
+        '/this-day-in-history/january',   // Generic date pages
+        '/this-day-in-history/february',
+        '/this-day-in-history/march',
+        '/this-day-in-history/april',
+        '/this-day-in-history/may',
+        '/this-day-in-history/june',
+        '/this-day-in-history/july',
+        '/this-day-in-history/august',
+        '/this-day-in-history/september',
+        '/this-day-in-history/october',
+        '/this-day-in-history/november',
+        '/this-day-in-history/december',
+        '/a-year-in-history/',            // Year archive pages
+        '/shows/',                         // TV show pages
+        '/related',                        // Related articles pages
+        'links.e.',                        // Email tracking links
+        '/question/',                      // Q&A pages (low quality)
+      ];
+      return junkPatterns.some(p => url.includes(p));
+    };
+
     for (const source of authSources) {
       await delay(500);
 
@@ -625,17 +650,21 @@ export async function searchWebForNews(topic: string, _maxResults?: number): Pro
       );
 
       const sourceResults = sourceResponse.data?.organic || [];
+      let added = 0;
       for (const s of sourceResults) {
-        if (!results.find(r => r.url === s.link)) {
-          results.push({
-            url: s.link,
-            title: s.title,
-            source: extractDomain(s.link),
-            snippet: s.snippet,
-          });
-        }
+        // Skip junk URLs
+        if (isJunkUrl(s.link)) continue;
+        if (results.find(r => r.url === s.link)) continue;
+
+        results.push({
+          url: s.link,
+          title: s.title,
+          source: extractDomain(s.link),
+          snippet: s.snippet,
+        });
+        added++;
       }
-      console.log(`[News] Found ${sourceResults.length} from ${source}`);
+      console.log(`[News] Found ${added} quality articles from ${source}`);
     }
 
   } catch (error: any) {
