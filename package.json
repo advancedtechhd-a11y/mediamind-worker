@@ -4,9 +4,20 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch src/orchestrator.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/orchestrator.js",
+    "start:orchestrator": "node dist/orchestrator.js",
+    "start:video": "node dist/workers/video-standalone.js",
+    "start:image": "node dist/workers/image-standalone.js",
+    "start:webcontent": "node dist/workers/webcontent-standalone.js",
+    "start:ffmpeg": "node dist/workers/ffmpeg-standalone.js",
+    "start:all": "npm run start:video & npm run start:image & npm run start:webcontent & npm run start:ffmpeg & npm run start:orchestrator",
+    "dev:orchestrator": "tsx watch src/orchestrator.ts",
+    "dev:video": "tsx watch src/workers/video-standalone.ts",
+    "dev:image": "tsx watch src/workers/image-standalone.ts",
+    "dev:webcontent": "tsx watch src/workers/webcontent-standalone.ts",
+    "dev:ffmpeg": "tsx watch src/workers/ffmpeg-standalone.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",

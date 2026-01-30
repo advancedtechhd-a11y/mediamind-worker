@@ -40,8 +40,10 @@ COPY . .
 # Build TypeScript
 RUN npm run build
 
-# Expose port
-EXPOSE 8080
+# Expose all service ports
+EXPOSE 3000 3001 3002 3003 3004
 
-# Start
-CMD ["npm", "run", "start"]
+# Start all workers using a startup script
+COPY start-workers.sh ./
+RUN chmod +x start-workers.sh
+CMD ["./start-workers.sh"]
