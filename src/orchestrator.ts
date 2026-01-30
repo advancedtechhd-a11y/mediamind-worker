@@ -105,13 +105,23 @@ app.post('/v1/research', async (req, res) => {
 
   try {
     // Create project
-    await supabase.from('projects').insert({
+    console.log(`[Orchestrator] Creating project in Supabase...`);
+    console.log(`[Orchestrator] SUPABASE_URL: ${process.env.SUPABASE_URL}`);
+
+    const { data: insertData, error: insertError } = await supabase.from('projects').insert({
       id: projectId,
       topic,
       slug,
       status: 'processing',
       started_at: new Date().toISOString(),
-    });
+    }).select();
+
+    if (insertError) {
+      console.error(`[Orchestrator] Supabase INSERT ERROR: ${JSON.stringify(insertError)}`);
+      return res.status(500).json({ success: false, error: `Database error: ${insertError.message}` });
+    }
+
+    console.log(`[Orchestrator] Project created successfully: ${JSON.stringify(insertData)}`);
 
     // Return immediately, process in background
     res.json({
