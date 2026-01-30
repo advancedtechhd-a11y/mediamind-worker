@@ -72,8 +72,8 @@ async function searchArchiveOrgVideos(topic: string): Promise<VideoSearchResult[
   const results: VideoSearchResult[] = [];
 
   try {
-    // Search for movies/videos
-    const searchUrl = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(topic)}&fl[]=identifier,title,description,mediatype&sort[]=downloads+desc&rows=100&output=json&mediatype=movies`;
+    // Search for movies/videos (mediatype goes IN the query, not as separate param)
+    const searchUrl = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(topic)}+AND+mediatype:movies&fl[]=identifier,title,description,mediatype&sort[]=downloads+desc&rows=100&output=json`;
 
     const response = await axios.get(searchUrl, {
       headers: { 'User-Agent': ARCHIVE_USER_AGENT },
@@ -83,12 +83,13 @@ async function searchArchiveOrgVideos(topic: string): Promise<VideoSearchResult[
     const docs = response.data?.response?.docs || [];
     console.log(`[Archive.org] Found ${docs.length} video items`);
 
-    // Process each result
-    for (const doc of docs) {
-      if (doc.mediatype !== 'movies') continue;
+    // Process results (limit to first 50 to avoid timeout)
+    const maxToProcess = Math.min(docs.length, 50);
+    for (let i = 0; i < maxToProcess; i++) {
+      const doc = docs[i];
 
-      // Add delay to be nice to Archive.org
-      await delay(500);
+      // Add small delay to be nice to Archive.org
+      await delay(200);
 
       try {
         // Get metadata to find actual video file
@@ -144,8 +145,8 @@ async function searchArchiveOrgImages(topic: string): Promise<ImageSearchResult[
   const results: ImageSearchResult[] = [];
 
   try {
-    // Search for images
-    const searchUrl = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(topic)}&fl[]=identifier,title,mediatype&sort[]=downloads+desc&rows=50&output=json&mediatype=image`;
+    // Search for images (mediatype goes IN the query, not as separate param)
+    const searchUrl = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(topic)}+AND+mediatype:image&fl[]=identifier,title,mediatype&sort[]=downloads+desc&rows=50&output=json`;
 
     const response = await axios.get(searchUrl, {
       headers: { 'User-Agent': ARCHIVE_USER_AGENT },
