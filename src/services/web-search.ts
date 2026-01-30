@@ -204,7 +204,7 @@ async function searchArchiveOrgImages(topic: string): Promise<ImageSearchResult[
 // VIDEO SEARCH (Archive.org + Web)
 // ============================================
 
-export async function searchWebForVideos(topic: string): Promise<VideoSearchResult[]> {
+export async function searchWebForVideos(topic: string, _maxResults?: number): Promise<VideoSearchResult[]> {
   if (!SERPER_API_KEY) {
     console.log(`[Search] Serper API key not set`);
     return [];
@@ -396,7 +396,7 @@ async function searchHistoricalVideoArchives(topic: string): Promise<VideoSearch
 // IMAGE SEARCH (Archive.org + Google + Others)
 // ============================================
 
-export async function searchWebForImages(topic: string): Promise<ImageSearchResult[]> {
+export async function searchWebForImages(topic: string, _maxResults?: number): Promise<ImageSearchResult[]> {
   if (!SERPER_API_KEY) {
     console.log(`[Search] Serper API key not set`);
     return [];
@@ -536,7 +536,7 @@ async function searchFlickrImages(topic: string): Promise<ImageSearchResult[]> {
 // NEWS SEARCH
 // ============================================
 
-export async function searchWebForNews(topic: string): Promise<NewsSearchResult[]> {
+export async function searchWebForNews(topic: string, _maxResults?: number): Promise<NewsSearchResult[]> {
   if (!SERPER_API_KEY) {
     console.log(`[Search] Serper API key not set`);
     return [];
@@ -649,7 +649,7 @@ export async function searchWebForNews(topic: string): Promise<NewsSearchResult[
 // NEWSPAPER SEARCH (Historical)
 // ============================================
 
-export async function searchHistoricalNewspapers(topic: string): Promise<NewspaperResult[]> {
+export async function searchHistoricalNewspapers(topic: string, _maxResults?: number): Promise<NewspaperResult[]> {
   if (!SERPER_API_KEY) {
     console.log(`[Search] Serper API key not set`);
     return [];

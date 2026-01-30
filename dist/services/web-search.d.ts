@@ -4,6 +4,8 @@ interface VideoSearchResult {
     source: string;
     duration?: number;
     thumbnail?: string;
+    snippet?: string;
+    identifier?: string;
 }
 interface ImageSearchResult {
     url: string;
@@ -28,21 +30,16 @@ interface NewspaperResult {
     snippet?: string;
     imageUrl?: string;
 }
-export declare function searchWebForVideos(topic: string, maxResults?: number): Promise<VideoSearchResult[]>;
-export declare function searchWebForImages(topic: string, maxResults?: number): Promise<ImageSearchResult[]>;
-export declare function searchWebForNews(topic: string, maxResults?: number): Promise<NewsSearchResult[]>;
-export declare function searchHistoricalNewspapers(topic: string, maxResults?: number): Promise<NewspaperResult[]>;
+export declare function searchWebForVideos(topic: string, _maxResults?: number): Promise<VideoSearchResult[]>;
+export declare function searchWebForImages(topic: string, _maxResults?: number): Promise<ImageSearchResult[]>;
+export declare function searchWebForNews(topic: string, _maxResults?: number): Promise<NewsSearchResult[]>;
+export declare function searchHistoricalNewspapers(topic: string, _maxResults?: number): Promise<NewspaperResult[]>;
 export interface CombinedSearchResults {
     videos: VideoSearchResult[];
     images: ImageSearchResult[];
     newspapers: NewspaperResult[];
     news: NewsSearchResult[];
 }
-export declare function searchAllMedia(topic: string, options?: {
-    maxVideos?: number;
-    maxImages?: number;
-    maxNewspapers?: number;
-    maxNews?: number;
-}): Promise<CombinedSearchResults>;
+export declare function searchAllMedia(topic: string): Promise<CombinedSearchResults>;
 export {};
 //# sourceMappingURL=web-search.d.ts.map

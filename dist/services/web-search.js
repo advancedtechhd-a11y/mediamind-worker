@@ -1,167 +1,106 @@
-// Web Search Service - Serper Only
-// Uses Serper API for all searches:
-// 1. Archive.org (historical content via site: search)
-// 2. Web search (modern content via Google)
+// Web Search Service - Archive.org Native API + Serper
+// 1. Archive.org - Native API (better results, no Google indexing issues)
+// 2. Serper - Web search, news, images (excluding YouTube/TikTok)
+// 3. No limits - fetch everything found
 import axios from 'axios';
 const SERPER_API_KEY = process.env.SERPER_API_KEY;
+// Delay helper to avoid rate limiting
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+// User agent for Archive.org (be a good citizen)
+const ARCHIVE_USER_AGENT = 'MediaMind Research Bot/1.0 (automated research tool)';
+// Sites to EXCLUDE (can't download from these)
+const EXCLUDED_SITES = [
+    'youtube.com',
+    'youtu.be',
+    'tiktok.com',
+    'facebook.com',
+    'fb.watch',
+    'instagram.com',
+    'twitter.com',
+    'x.com',
+];
 // ============================================
-// VIDEO SEARCH (Serper Only)
+// ARCHIVE.ORG NATIVE API (Videos & Images)
 // ============================================
-export async function searchWebForVideos(topic, maxResults = 20) {
-    if (!SERPER_API_KEY) {
-        console.log(`[Serper] API key not set`);
-        return [];
-    }
+// Search Archive.org using their native API - much better than Serper site: search
+async function searchArchiveOrgVideos(topic) {
+    console.log(`[Archive.org] Searching videos for "${topic}"...`);
     const results = [];
     try {
-        // Step 1: Search Archive.org for historical videos
-        console.log(`[Serper] Step 1: Searching Archive.org for "${topic}" videos...`);
-        const archiveResults = await searchArchiveVideos(topic);
-        for (const r of archiveResults) {
-            if (!results.find(e => e.url === r.url))
-                results.push(r);
-        }
-        console.log(`[Serper] Found ${archiveResults.length} Archive.org videos`);
-        // Step 2: Search Google for web videos
-        console.log(`[Serper] Step 2: Searching web for "${topic}" videos...`);
-        const webResults = await searchGoogleVideos(topic);
-        for (const r of webResults) {
-            if (!results.find(e => e.url === r.url))
-                results.push(r);
-        }
-        console.log(`[Serper] Found ${webResults.length} web videos`);
-    }
-    catch (error) {
-        console.error(`[Serper] Video search failed:`, error.message);
-    }
-    console.log(`[Serper] Total unique videos: ${results.length}`);
-    return results.slice(0, maxResults);
-}
-// Search Archive.org videos via Serper
-async function searchArchiveVideos(topic) {
-    try {
-        const query = `site:archive.org "${topic}" video OR film OR newsreel OR footage`;
-        const response = await axios.post('https://google.serper.dev/search', { q: query, num: 15 }, {
-            headers: {
-                'X-API-KEY': SERPER_API_KEY,
-                'Content-Type': 'application/json',
-            },
-            timeout: 15000,
+        // Search for movies/videos
+        const searchUrl = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(topic)}&fl[]=identifier,title,description,mediatype&sort[]=downloads+desc&rows=100&output=json&mediatype=movies`;
+        const response = await axios.get(searchUrl, {
+            headers: { 'User-Agent': ARCHIVE_USER_AGENT },
+            timeout: 30000,
         });
-        const organic = response.data?.organic || [];
-        const results = [];
-        for (const item of organic) {
-            // Extract Archive.org identifier
-            const match = item.link?.match(/archive\.org\/details\/([^\/\?]+)/);
-            if (!match)
+        const docs = response.data?.response?.docs || [];
+        console.log(`[Archive.org] Found ${docs.length} video items`);
+        // Process each result
+        for (const doc of docs) {
+            if (doc.mediatype !== 'movies')
                 continue;
-            const identifier = match[1];
+            // Add delay to be nice to Archive.org
+            await delay(500);
             try {
                 // Get metadata to find actual video file
-                const metaResponse = await axios.get(`https://archive.org/metadata/${identifier}`, { timeout: 10000 });
+                const metaResponse = await axios.get(`https://archive.org/metadata/${doc.identifier}`, {
+                    headers: { 'User-Agent': ARCHIVE_USER_AGENT },
+                    timeout: 15000,
+                });
                 const files = metaResponse.data?.files || [];
                 const metadata = metaResponse.data?.metadata || {};
-                // Find MP4 file
+                // Find MP4 file (prefer derivative/smaller files)
                 const videoFile = files.find((f) => f.name?.endsWith('.mp4') && f.source === 'derivative') || files.find((f) => f.name?.endsWith('.mp4'));
                 if (videoFile) {
                     results.push({
-                        url: `https://archive.org/download/${identifier}/${videoFile.name}`,
-                        title: metadata.title || item.title || identifier,
+                        url: `https://archive.org/download/${doc.identifier}/${videoFile.name}`,
+                        title: metadata.title || doc.title || doc.identifier,
                         source: 'archive.org',
-                        thumbnail: `https://archive.org/services/img/${identifier}`,
+                        thumbnail: `https://archive.org/services/img/${doc.identifier}`,
+                        snippet: typeof metadata.description === 'string'
+                            ? metadata.description.slice(0, 200)
+                            : Array.isArray(metadata.description)
+                                ? metadata.description[0]?.slice(0, 200)
+                                : undefined,
+                        identifier: doc.identifier,
                     });
+                    console.log(`[Archive.org] Added video: ${doc.title?.slice(0, 50)}...`);
                 }
             }
             catch (e) {
-                // Skip items with metadata errors
+                // Skip items with errors, continue with others
+                console.log(`[Archive.org] Skipped ${doc.identifier}: ${e.message}`);
             }
-            if (results.length >= 10)
-                break;
         }
-        return results;
     }
     catch (error) {
-        console.error(`[Serper] Archive video search failed:`, error.message);
-        return [];
+        console.error(`[Archive.org] Video search failed:`, error.message);
     }
+    console.log(`[Archive.org] Total videos found: ${results.length}`);
+    return results;
 }
-// Search Google videos via Serper
-async function searchGoogleVideos(topic) {
-    try {
-        const response = await axios.post('https://google.serper.dev/videos', { q: topic, num: 15 }, {
-            headers: {
-                'X-API-KEY': SERPER_API_KEY,
-                'Content-Type': 'application/json',
-            },
-            timeout: 15000,
-        });
-        const videos = response.data?.videos || [];
-        return videos.map((v) => ({
-            url: v.link,
-            title: v.title,
-            source: extractDomain(v.link),
-            duration: parseDuration(v.duration),
-            thumbnail: v.imageUrl,
-        }));
-    }
-    catch (error) {
-        console.error(`[Serper] Google video search failed:`, error.message);
-        return [];
-    }
-}
-// ============================================
-// IMAGE SEARCH (Serper Only)
-// ============================================
-export async function searchWebForImages(topic, maxResults = 30) {
-    if (!SERPER_API_KEY) {
-        console.log(`[Serper] API key not set`);
-        return [];
-    }
+// Search Archive.org for images
+async function searchArchiveOrgImages(topic) {
+    console.log(`[Archive.org] Searching images for "${topic}"...`);
     const results = [];
     try {
-        // Step 1: Search Archive.org for historical images
-        console.log(`[Serper] Step 1: Searching Archive.org for "${topic}" images...`);
-        const archiveResults = await searchArchiveImages(topic);
-        for (const r of archiveResults) {
-            if (!results.find(e => e.url === r.url))
-                results.push(r);
-        }
-        console.log(`[Serper] Found ${archiveResults.length} Archive.org images`);
-        // Step 2: Search Google for web images
-        console.log(`[Serper] Step 2: Searching web for "${topic}" images...`);
-        const webResults = await searchGoogleImages(topic);
-        for (const r of webResults) {
-            if (!results.find(e => e.url === r.url))
-                results.push(r);
-        }
-        console.log(`[Serper] Found ${webResults.length} web images`);
-    }
-    catch (error) {
-        console.error(`[Serper] Image search failed:`, error.message);
-    }
-    console.log(`[Serper] Total unique images: ${results.length}`);
-    return results.slice(0, maxResults);
-}
-// Search Archive.org images via Serper
-async function searchArchiveImages(topic) {
-    try {
-        const query = `site:archive.org "${topic}" photo OR photograph OR image OR portrait`;
-        const response = await axios.post('https://google.serper.dev/search', { q: query, num: 15 }, {
-            headers: {
-                'X-API-KEY': SERPER_API_KEY,
-                'Content-Type': 'application/json',
-            },
-            timeout: 15000,
+        // Search for images
+        const searchUrl = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(topic)}&fl[]=identifier,title,mediatype&sort[]=downloads+desc&rows=50&output=json&mediatype=image`;
+        const response = await axios.get(searchUrl, {
+            headers: { 'User-Agent': ARCHIVE_USER_AGENT },
+            timeout: 30000,
         });
-        const organic = response.data?.organic || [];
-        const results = [];
-        for (const item of organic) {
-            const match = item.link?.match(/archive\.org\/details\/([^\/\?]+)/);
-            if (!match)
+        const docs = response.data?.response?.docs || [];
+        console.log(`[Archive.org] Found ${docs.length} image items`);
+        for (const doc of docs) {
+            if (doc.mediatype !== 'image')
                 continue;
-            const identifier = match[1];
+            await delay(300);
             try {
-                const metaResponse = await axios.get(`https://archive.org/metadata/${identifier}`, { timeout: 10000 });
+                const metaResponse = await axios.get(`https://archive.org/metadata/${doc.identifier}`, {
+                    headers: { 'User-Agent': ARCHIVE_USER_AGENT },
+                    timeout: 10000,
+                });
                 const files = metaResponse.data?.files || [];
                 const metadata = metaResponse.data?.metadata || {};
                 // Find image file
@@ -170,30 +109,230 @@ async function searchArchiveImages(topic) {
                     !f.name?.includes('thumb'));
                 if (imageFile) {
                     results.push({
-                        url: `https://archive.org/download/${identifier}/${imageFile.name}`,
-                        title: metadata.title || item.title || identifier,
+                        url: `https://archive.org/download/${doc.identifier}/${imageFile.name}`,
+                        title: metadata.title || doc.title || doc.identifier,
                         source: 'archive.org',
-                        thumbnail: `https://archive.org/services/img/${identifier}`,
+                        thumbnail: `https://archive.org/services/img/${doc.identifier}`,
                     });
                 }
             }
             catch (e) {
-                // Skip items with metadata errors
+                // Skip errors
             }
-            if (results.length >= 10)
-                break;
         }
+    }
+    catch (error) {
+        console.error(`[Archive.org] Image search failed:`, error.message);
+    }
+    console.log(`[Archive.org] Total images found: ${results.length}`);
+    return results;
+}
+// ============================================
+// VIDEO SEARCH (Archive.org + Web)
+// ============================================
+export async function searchWebForVideos(topic, _maxResults) {
+    if (!SERPER_API_KEY) {
+        console.log(`[Search] Serper API key not set`);
+        return [];
+    }
+    const results = [];
+    try {
+        // Step 1: Archive.org Native API (BEST source for videos)
+        console.log(`[Video] Step 1: Searching Archive.org...`);
+        const archiveResults = await searchArchiveOrgVideos(topic);
+        for (const r of archiveResults) {
+            if (!results.find(e => e.url === r.url))
+                results.push(r);
+        }
+        // Step 2: Search web for pages WITH videos (excluding YouTube/TikTok)
+        console.log(`[Video] Step 2: Searching web (excluding YouTube/TikTok)...`);
+        const webResults = await searchWebPagesWithVideos(topic);
+        for (const r of webResults) {
+            if (!results.find(e => e.url === r.url))
+                results.push(r);
+        }
+        // Step 3: Alternative platforms (Vimeo, Dailymotion, etc.)
+        console.log(`[Video] Step 3: Searching alternative platforms...`);
+        const altResults = await searchAlternativeVideoPlatforms(topic);
+        for (const r of altResults) {
+            if (!results.find(e => e.url === r.url))
+                results.push(r);
+        }
+        // Step 4: Historical archives (British Pathé, C-SPAN, etc.)
+        console.log(`[Video] Step 4: Searching historical archives...`);
+        const histResults = await searchHistoricalVideoArchives(topic);
+        for (const r of histResults) {
+            if (!results.find(e => e.url === r.url))
+                results.push(r);
+        }
+    }
+    catch (error) {
+        console.error(`[Video] Search failed:`, error.message);
+    }
+    console.log(`[Video] Total unique videos: ${results.length}`);
+    return results; // No limit - return everything
+}
+// Search web pages that contain videos (CNN, BBC, etc.)
+async function searchWebPagesWithVideos(topic) {
+    try {
+        const exclusions = EXCLUDED_SITES.map(s => `-site:${s}`).join(' ');
+        const queries = [
+            `"${topic}" video ${exclusions}`,
+            `"${topic}" footage OR clip ${exclusions}`,
+        ];
+        const results = [];
+        for (const query of queries) {
+            await delay(500);
+            const response = await axios.post('https://google.serper.dev/search', { q: query, num: 30 }, {
+                headers: {
+                    'X-API-KEY': SERPER_API_KEY,
+                    'Content-Type': 'application/json',
+                },
+                timeout: 15000,
+            });
+            const organic = response.data?.organic || [];
+            for (const item of organic) {
+                const domain = extractDomain(item.link);
+                if (EXCLUDED_SITES.some(s => domain.includes(s.replace('www.', ''))))
+                    continue;
+                if (results.find(r => r.url === item.link))
+                    continue;
+                results.push({
+                    url: item.link,
+                    title: item.title,
+                    source: domain,
+                    snippet: item.snippet,
+                });
+            }
+        }
+        console.log(`[Video] Found ${results.length} web pages with videos`);
         return results;
     }
     catch (error) {
-        console.error(`[Serper] Archive image search failed:`, error.message);
+        console.error(`[Video] Web search failed:`, error.message);
         return [];
     }
 }
-// Search Google images via Serper
+// Search Vimeo, Dailymotion, etc.
+async function searchAlternativeVideoPlatforms(topic) {
+    const platforms = [
+        { site: 'vimeo.com', name: 'Vimeo' },
+        { site: 'dailymotion.com', name: 'Dailymotion' },
+        { site: 'rumble.com', name: 'Rumble' },
+        { site: 'odysee.com', name: 'Odysee' },
+    ];
+    const results = [];
+    for (const platform of platforms) {
+        try {
+            await delay(500);
+            const response = await axios.post('https://google.serper.dev/search', { q: `site:${platform.site} "${topic}"`, num: 20 }, {
+                headers: {
+                    'X-API-KEY': SERPER_API_KEY,
+                    'Content-Type': 'application/json',
+                },
+                timeout: 10000,
+            });
+            const organic = response.data?.organic || [];
+            for (const item of organic) {
+                results.push({
+                    url: item.link,
+                    title: item.title,
+                    source: platform.name,
+                    snippet: item.snippet,
+                });
+            }
+            console.log(`[Video] Found ${organic.length} on ${platform.name}`);
+        }
+        catch (e) {
+            console.log(`[Video] ${platform.name} search failed: ${e.message}`);
+        }
+    }
+    return results;
+}
+// Search British Pathé, C-SPAN, etc.
+async function searchHistoricalVideoArchives(topic) {
+    const archives = [
+        { site: 'britishpathe.com', name: 'British Pathé' },
+        { site: 'c-span.org/video', name: 'C-SPAN' },
+        { site: 'loc.gov', name: 'Library of Congress' },
+        { site: 'aparchive.com', name: 'AP Archive' },
+    ];
+    const results = [];
+    for (const archive of archives) {
+        try {
+            await delay(500);
+            const response = await axios.post('https://google.serper.dev/search', { q: `site:${archive.site} "${topic}"`, num: 20 }, {
+                headers: {
+                    'X-API-KEY': SERPER_API_KEY,
+                    'Content-Type': 'application/json',
+                },
+                timeout: 10000,
+            });
+            const organic = response.data?.organic || [];
+            for (const item of organic) {
+                results.push({
+                    url: item.link,
+                    title: item.title,
+                    source: archive.name,
+                    snippet: item.snippet,
+                });
+            }
+            console.log(`[Video] Found ${organic.length} on ${archive.name}`);
+        }
+        catch (e) {
+            console.log(`[Video] ${archive.name} search failed: ${e.message}`);
+        }
+    }
+    return results;
+}
+// ============================================
+// IMAGE SEARCH (Archive.org + Google + Others)
+// ============================================
+export async function searchWebForImages(topic, _maxResults) {
+    if (!SERPER_API_KEY) {
+        console.log(`[Search] Serper API key not set`);
+        return [];
+    }
+    const results = [];
+    try {
+        // Step 1: Archive.org images
+        console.log(`[Image] Step 1: Searching Archive.org...`);
+        const archiveResults = await searchArchiveOrgImages(topic);
+        for (const r of archiveResults) {
+            if (!results.find(e => e.url === r.url))
+                results.push(r);
+        }
+        // Step 2: Google Images via Serper
+        console.log(`[Image] Step 2: Searching Google Images...`);
+        const googleResults = await searchGoogleImages(topic);
+        for (const r of googleResults) {
+            if (!results.find(e => e.url === r.url))
+                results.push(r);
+        }
+        // Step 3: Wikimedia Commons
+        console.log(`[Image] Step 3: Searching Wikimedia Commons...`);
+        const wikimediaResults = await searchWikimediaImages(topic);
+        for (const r of wikimediaResults) {
+            if (!results.find(e => e.url === r.url))
+                results.push(r);
+        }
+        // Step 4: Flickr
+        console.log(`[Image] Step 4: Searching Flickr...`);
+        const flickrResults = await searchFlickrImages(topic);
+        for (const r of flickrResults) {
+            if (!results.find(e => e.url === r.url))
+                results.push(r);
+        }
+    }
+    catch (error) {
+        console.error(`[Image] Search failed:`, error.message);
+    }
+    console.log(`[Image] Total unique images: ${results.length}`);
+    return results; // No limit - return everything
+}
 async function searchGoogleImages(topic) {
     try {
-        const response = await axios.post('https://google.serper.dev/images', { q: topic, num: 20 }, {
+        const response = await axios.post('https://google.serper.dev/images', { q: topic, num: 100 }, {
             headers: {
                 'X-API-KEY': SERPER_API_KEY,
                 'Content-Type': 'application/json',
@@ -201,6 +340,7 @@ async function searchGoogleImages(topic) {
             timeout: 15000,
         });
         const images = response.data?.images || [];
+        console.log(`[Image] Found ${images.length} Google images`);
         return images.map((img) => ({
             url: img.imageUrl,
             title: img.title,
@@ -211,23 +351,69 @@ async function searchGoogleImages(topic) {
         }));
     }
     catch (error) {
-        console.error(`[Serper] Google image search failed:`, error.message);
+        console.error(`[Image] Google search failed:`, error.message);
+        return [];
+    }
+}
+async function searchWikimediaImages(topic) {
+    try {
+        await delay(500);
+        const response = await axios.post('https://google.serper.dev/search', { q: `site:commons.wikimedia.org "${topic}"`, num: 30 }, {
+            headers: {
+                'X-API-KEY': SERPER_API_KEY,
+                'Content-Type': 'application/json',
+            },
+            timeout: 15000,
+        });
+        const organic = response.data?.organic || [];
+        console.log(`[Image] Found ${organic.length} Wikimedia images`);
+        return organic.map((item) => ({
+            url: item.link,
+            title: item.title,
+            source: 'Wikimedia Commons',
+        }));
+    }
+    catch (error) {
+        console.error(`[Image] Wikimedia search failed:`, error.message);
+        return [];
+    }
+}
+async function searchFlickrImages(topic) {
+    try {
+        await delay(500);
+        const response = await axios.post('https://google.serper.dev/search', { q: `site:flickr.com "${topic}"`, num: 30 }, {
+            headers: {
+                'X-API-KEY': SERPER_API_KEY,
+                'Content-Type': 'application/json',
+            },
+            timeout: 15000,
+        });
+        const organic = response.data?.organic || [];
+        console.log(`[Image] Found ${organic.length} Flickr images`);
+        return organic.map((item) => ({
+            url: item.link,
+            title: item.title,
+            source: 'Flickr',
+        }));
+    }
+    catch (error) {
+        console.error(`[Image] Flickr search failed:`, error.message);
         return [];
     }
 }
 // ============================================
-// NEWS SEARCH (Serper Only)
+// NEWS SEARCH
 // ============================================
-export async function searchWebForNews(topic, maxResults = 15) {
+export async function searchWebForNews(topic, _maxResults) {
     if (!SERPER_API_KEY) {
-        console.log(`[Serper] API key not set`);
+        console.log(`[Search] Serper API key not set`);
         return [];
     }
     const results = [];
     try {
-        // Step 1: Google News search
-        console.log(`[Serper] Searching news for "${topic}"...`);
-        const response = await axios.post('https://google.serper.dev/news', { q: topic, num: maxResults }, {
+        // Step 1: Google News
+        console.log(`[News] Step 1: Searching Google News...`);
+        const response = await axios.post('https://google.serper.dev/news', { q: topic, num: 50 }, {
             headers: {
                 'X-API-KEY': SERPER_API_KEY,
                 'Content-Type': 'application/json',
@@ -236,18 +422,22 @@ export async function searchWebForNews(topic, maxResults = 15) {
         });
         const news = response.data?.news || [];
         for (const n of news) {
+            const domain = extractDomain(n.link);
+            if (EXCLUDED_SITES.some(s => domain.includes(s.replace('www.', ''))))
+                continue;
             results.push({
                 url: n.link,
                 title: n.title,
-                source: n.source || extractDomain(n.link),
+                source: n.source || domain,
                 snippet: n.snippet,
                 date: n.date,
             });
         }
-        console.log(`[Serper] Found ${news.length} news articles`);
+        console.log(`[News] Found ${results.length} news articles`);
         // Step 2: General article search
-        console.log(`[Serper] Searching articles for "${topic}"...`);
-        const articleResponse = await axios.post('https://google.serper.dev/search', { q: `${topic} article`, num: 10 }, {
+        console.log(`[News] Step 2: Searching articles...`);
+        await delay(500);
+        const articleResponse = await axios.post('https://google.serper.dev/search', { q: topic, num: 30 }, {
             headers: {
                 'X-API-KEY': SERPER_API_KEY,
                 'Content-Type': 'application/json',
@@ -256,35 +446,63 @@ export async function searchWebForNews(topic, maxResults = 15) {
         });
         const organic = articleResponse.data?.organic || [];
         for (const o of organic) {
-            if (!results.find(r => r.url === o.link)) {
-                results.push({
-                    url: o.link,
-                    title: o.title,
-                    source: extractDomain(o.link),
-                    snippet: o.snippet,
-                });
+            const domain = extractDomain(o.link);
+            if (EXCLUDED_SITES.some(s => domain.includes(s.replace('www.', ''))))
+                continue;
+            if (results.find(r => r.url === o.link))
+                continue;
+            results.push({
+                url: o.link,
+                title: o.title,
+                source: domain,
+                snippet: o.snippet,
+            });
+        }
+        // Step 3: Authoritative sources
+        console.log(`[News] Step 3: Searching authoritative sources...`);
+        const authSources = ['history.com', 'britannica.com', 'wikipedia.org'];
+        for (const source of authSources) {
+            await delay(500);
+            const sourceResponse = await axios.post('https://google.serper.dev/search', { q: `site:${source} "${topic}"`, num: 10 }, {
+                headers: {
+                    'X-API-KEY': SERPER_API_KEY,
+                    'Content-Type': 'application/json',
+                },
+                timeout: 10000,
+            });
+            const sourceResults = sourceResponse.data?.organic || [];
+            for (const s of sourceResults) {
+                if (!results.find(r => r.url === s.link)) {
+                    results.push({
+                        url: s.link,
+                        title: s.title,
+                        source: extractDomain(s.link),
+                        snippet: s.snippet,
+                    });
+                }
             }
+            console.log(`[News] Found ${sourceResults.length} from ${source}`);
         }
     }
     catch (error) {
-        console.error(`[Serper] News search failed:`, error.message);
+        console.error(`[News] Search failed:`, error.message);
     }
-    return results.slice(0, maxResults);
+    console.log(`[News] Total unique articles: ${results.length}`);
+    return results; // No limit - return everything
 }
 // ============================================
-// HISTORICAL NEWSPAPER SEARCH (Serper Only)
+// NEWSPAPER SEARCH (Historical)
 // ============================================
-export async function searchHistoricalNewspapers(topic, maxResults = 10) {
+export async function searchHistoricalNewspapers(topic, _maxResults) {
     if (!SERPER_API_KEY) {
-        console.log(`[Serper] API key not set`);
+        console.log(`[Search] Serper API key not set`);
         return [];
     }
     const results = [];
     try {
-        // Search Chronicling America (Library of Congress)
-        console.log(`[Serper] Searching Chronicling America for "${topic}"...`);
-        const chroniclingQuery = `site:chroniclingamerica.loc.gov "${topic}"`;
-        const chroniclingResponse = await axios.post('https://google.serper.dev/search', { q: chroniclingQuery, num: 10 }, {
+        // Chronicling America (Library of Congress)
+        console.log(`[Newspaper] Searching Chronicling America...`);
+        const chroniclingResponse = await axios.post('https://google.serper.dev/search', { q: `site:chroniclingamerica.loc.gov "${topic}"`, num: 30 }, {
             headers: {
                 'X-API-KEY': SERPER_API_KEY,
                 'Content-Type': 'application/json',
@@ -297,17 +515,17 @@ export async function searchHistoricalNewspapers(topic, maxResults = 10) {
             results.push({
                 url: item.link,
                 title: item.title,
-                source: 'chroniclingamerica.loc.gov',
+                source: 'Library of Congress',
                 date: dateMatch ? dateMatch[1] : undefined,
                 snippet: item.snippet,
                 imageUrl: item.link?.replace(/\/$/, '') + '.jp2',
             });
         }
-        console.log(`[Serper] Found ${chroniclingResults.length} Chronicling America results`);
-        // Search Archive.org newspapers
-        console.log(`[Serper] Searching Archive.org newspapers for "${topic}"...`);
-        const archiveQuery = `site:archive.org "${topic}" newspaper OR gazette OR "news clipping"`;
-        const archiveResponse = await axios.post('https://google.serper.dev/search', { q: archiveQuery, num: 10 }, {
+        console.log(`[Newspaper] Found ${chroniclingResults.length} from Chronicling America`);
+        // Archive.org newspapers
+        await delay(500);
+        console.log(`[Newspaper] Searching Archive.org newspapers...`);
+        const archiveResponse = await axios.post('https://google.serper.dev/search', { q: `site:archive.org "${topic}" newspaper OR gazette`, num: 30 }, {
             headers: {
                 'X-API-KEY': SERPER_API_KEY,
                 'Content-Type': 'application/json',
@@ -316,44 +534,61 @@ export async function searchHistoricalNewspapers(topic, maxResults = 10) {
         });
         const archiveResults = archiveResponse.data?.organic || [];
         for (const item of archiveResults) {
-            if (!results.find(r => r.url === item.link)) {
-                const identifier = item.link?.match(/archive\.org\/details\/([^\/\?]+)/)?.[1];
-                results.push({
-                    url: item.link,
-                    title: item.title,
-                    source: 'archive.org',
-                    snippet: item.snippet,
-                    imageUrl: identifier ? `https://archive.org/services/img/${identifier}` : undefined,
-                });
-            }
+            if (results.find(r => r.url === item.link))
+                continue;
+            const identifier = item.link?.match(/archive\.org\/details\/([^\/\?]+)/)?.[1];
+            results.push({
+                url: item.link,
+                title: item.title,
+                source: 'archive.org',
+                snippet: item.snippet,
+                imageUrl: identifier ? `https://archive.org/services/img/${identifier}` : undefined,
+            });
         }
-        console.log(`[Serper] Found ${archiveResults.length} Archive.org newspaper results`);
+        console.log(`[Newspaper] Found ${archiveResults.length} from Archive.org`);
+        // newspapers.com
+        await delay(500);
+        console.log(`[Newspaper] Searching newspapers.com...`);
+        const newspapersResponse = await axios.post('https://google.serper.dev/search', { q: `site:newspapers.com "${topic}"`, num: 20 }, {
+            headers: {
+                'X-API-KEY': SERPER_API_KEY,
+                'Content-Type': 'application/json',
+            },
+            timeout: 10000,
+        });
+        const newspapersResults = newspapersResponse.data?.organic || [];
+        for (const item of newspapersResults) {
+            if (results.find(r => r.url === item.link))
+                continue;
+            results.push({
+                url: item.link,
+                title: item.title,
+                source: 'newspapers.com',
+                snippet: item.snippet,
+            });
+        }
+        console.log(`[Newspaper] Found ${newspapersResults.length} from newspapers.com`);
     }
     catch (error) {
-        console.error(`[Serper] Newspaper search failed:`, error.message);
+        console.error(`[Newspaper] Search failed:`, error.message);
     }
-    console.log(`[Serper] Total newspapers: ${results.length}`);
-    return results.slice(0, maxResults);
+    console.log(`[Newspaper] Total newspapers: ${results.length}`);
+    return results; // No limit - return everything
 }
-export async function searchAllMedia(topic, options) {
-    const opts = {
-        maxVideos: options?.maxVideos ?? 10,
-        maxImages: options?.maxImages ?? 15,
-        maxNewspapers: options?.maxNewspapers ?? 10,
-        maxNews: options?.maxNews ?? 10,
-    };
+export async function searchAllMedia(topic) {
     console.log(`\n========================================`);
-    console.log(`[Serper] COMBINED SEARCH: "${topic}"`);
+    console.log(`[Search] COMBINED SEARCH: "${topic}"`);
+    console.log(`[Search] NO LIMITS - Fetching everything`);
     console.log(`========================================\n`);
     // Run all searches in parallel
     const [videos, images, newspapers, news] = await Promise.all([
-        searchWebForVideos(topic, opts.maxVideos),
-        searchWebForImages(topic, opts.maxImages),
-        searchHistoricalNewspapers(topic, opts.maxNewspapers),
-        searchWebForNews(topic, opts.maxNews),
+        searchWebForVideos(topic),
+        searchWebForImages(topic),
+        searchHistoricalNewspapers(topic),
+        searchWebForNews(topic),
     ]);
     console.log(`\n========================================`);
-    console.log(`[Serper] RESULTS SUMMARY`);
+    console.log(`[Search] RESULTS SUMMARY`);
     console.log(`  Videos: ${videos.length}`);
     console.log(`  Images: ${images.length}`);
     console.log(`  Newspapers: ${newspapers.length}`);
@@ -373,17 +608,5 @@ function extractDomain(url) {
     catch {
         return 'unknown';
     }
-}
-function parseDuration(durationStr) {
-    if (!durationStr)
-        return undefined;
-    const parts = durationStr.split(':').map(p => parseInt(p));
-    if (parts.length === 2) {
-        return parts[0] * 60 + parts[1];
-    }
-    else if (parts.length === 3) {
-        return parts[0] * 3600 + parts[1] * 60 + parts[2];
-    }
-    return undefined;
 }
 //# sourceMappingURL=web-search.js.map
