@@ -8,7 +8,8 @@ import { chromium } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { searchWeb, searchNews, searchSite } from '../utils/searxng.js';
+import { searchNews as searxngNews, searchSite } from '../utils/searxng.js';
+import { searchArticles as tavilySearch, searchNews as tavilyNews } from '../utils/tavily.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
@@ -187,28 +188,58 @@ async function uploadScreenshot(filePath, storagePath) {
 // ============================================
 // SEARCH SOURCES (Using SearXNG)
 // ============================================
-// 1. News Search
+// 1. News Search (Using Tavily for better relevance)
 async function searchNewsArticles(topic, queries) {
-    console.log('[WebContent] Searching news...');
+    console.log('[WebContent] Searching news via Tavily...');
     const results = [];
-    for (const query of queries) {
+    // Use Tavily for primary news search (AI-optimized relevance)
+    for (const query of queries.slice(0, 3)) {
         try {
-            const searchResults = await searchNews(query, 40);
-            for (const item of searchResults) {
+            const tavilyResults = await tavilyNews(query, 15);
+            for (const item of tavilyResults) {
                 results.push({
                     url: item.url,
                     title: item.title,
-                    source: item.engine || 'news',
+                    source: 'tavily',
                     snippet: item.content,
                     date: item.publishedDate,
                     type: 'news',
+                    score: item.score,
                 });
             }
         }
         catch (e) {
-            console.error(`[WebContent] News error: ${e.message}`);
+            console.error(`[WebContent] Tavily news error: ${e.message}`);
         }
     }
+    // Fallback to SearXNG if Tavily returns few results
+    if (results.length < 10) {
+        console.log('[WebContent] Adding SearXNG news as backup...');
+        for (const query of queries.slice(0, 2)) {
+            try {
+                const searchResults = await searxngNews(query, 20);
+                for (const item of searchResults) {
+                    // Avoid duplicates
+                    if (!results.find(r => r.url === item.url)) {
+                        results.push({
+                            url: item.url,
+                            title: item.title,
+                            source: item.engine || 'searxng',
+                            snippet: item.content,
+                            date: item.publishedDate,
+                            type: 'news',
+                            score: 0.5, // Lower score for SearXNG results
+                        });
+                    }
+                }
+            }
+            catch (e) {
+                console.error(`[WebContent] SearXNG news error: ${e.message}`);
+            }
+        }
+    }
+    // Sort by relevance score
+    results.sort((a, b) => (b.score || 0) - (a.score || 0));
     console.log(`[WebContent] News found: ${results.length}`);
     return results;
 }
@@ -293,14 +324,15 @@ async function searchAuthoritativeSources(topic, queries) {
     console.log(`[WebContent] Authoritative sources found: ${results.length}`);
     return results;
 }
-// 4. Blogs & Articles
+// 4. Blogs & Articles (Using Tavily for better relevance)
 async function searchBlogsAndArticles(topic, queries) {
-    console.log('[WebContent] Searching blogs & articles...');
+    console.log('[WebContent] Searching blogs & articles via Tavily...');
     const results = [];
-    for (const query of queries) {
+    // Use Tavily for primary article search (AI-optimized relevance)
+    for (const query of queries.slice(0, 3)) {
         try {
-            const searchResults = await searchWeb(`${query} blog article analysis report`, 40);
-            for (const item of searchResults) {
+            const tavilyResults = await tavilySearch(query, 15);
+            for (const item of tavilyResults) {
                 const domain = new URL(item.url).hostname.replace('www.', '');
                 results.push({
                     url: item.url,
@@ -308,11 +340,12 @@ async function searchBlogsAndArticles(topic, queries) {
                     source: domain,
                     snippet: item.content,
                     type: 'article',
+                    score: item.score,
                 });
             }
         }
         catch (e) {
-            console.error(`[WebContent] Blogs/articles error: ${e.message}`);
+            console.error(`[WebContent] Tavily articles error: ${e.message}`);
         }
     }
     console.log(`[WebContent] Blogs/articles found: ${results.length}`);
