@@ -102,48 +102,92 @@ export async function searchVideos(query: string, num: number = 30): Promise<Sea
   }
 }
 
-// News search - searches multiple engines for news
+// News search - searches multiple engines and strategies for maximum coverage
 export async function searchNews(query: string, num: number = 50): Promise<SearchResult[]> {
+  const allResults: any[] = [];
+
   try {
-    // Search news category
-    const newsResponse = await axios.get(`${SEARXNG_URL}/search`, {
+    // Strategy 1: Direct news category search
+    const newsPromise = axios.get(`${SEARXNG_URL}/search`, {
       params: {
         q: query,
         format: 'json',
         categories: 'news',
       },
       timeout: 20000,
-    });
+    }).catch(() => ({ data: { results: [] } }));
 
-    // Also search general web for news articles
-    const webNewsResponse = await axios.get(`${SEARXNG_URL}/search`, {
+    // Strategy 2: News with date qualifiers
+    const recentNewsPromise = axios.get(`${SEARXNG_URL}/search`, {
       params: {
-        q: `${query} news article report`,
+        q: `${query} news`,
+        format: 'json',
+        categories: 'news',
+        time_range: 'year',
+      },
+      timeout: 20000,
+    }).catch(() => ({ data: { results: [] } }));
+
+    // Strategy 3: General web search for news articles
+    const webNewsPromise = axios.get(`${SEARXNG_URL}/search`, {
+      params: {
+        q: `${query} news article report breaking`,
         format: 'json',
         categories: 'general',
       },
       timeout: 20000,
-    });
+    }).catch(() => ({ data: { results: [] } }));
 
-    const newsResults = newsResponse.data?.results || [];
-    const webNewsResults = webNewsResponse.data?.results || [];
+    // Strategy 4: Search major news sites directly
+    const majorNewsSites = ['bbc.com', 'cnn.com', 'nytimes.com', 'reuters.com', 'theguardian.com', 'apnews.com'];
+    const siteSearchPromise = axios.get(`${SEARXNG_URL}/search`, {
+      params: {
+        q: `${query} (site:${majorNewsSites.join(' OR site:')})`,
+        format: 'json',
+        categories: 'general',
+      },
+      timeout: 20000,
+    }).catch(() => ({ data: { results: [] } }));
 
-    const combined = [...newsResults, ...webNewsResults];
-    const unique = combined.filter((item, index, self) =>
-      index === self.findIndex(t => t.url === item.url)
-    );
+    // Strategy 5: Historical/archival news
+    const archiveNewsPromise = axios.get(`${SEARXNG_URL}/search`, {
+      params: {
+        q: `${query} newspaper article archive history`,
+        format: 'json',
+        categories: 'general',
+      },
+      timeout: 20000,
+    }).catch(() => ({ data: { results: [] } }));
 
-    return unique.slice(0, num).map((r: any) => ({
-      url: r.url,
-      title: r.title,
-      content: r.content,
-      engine: r.engine || (r.engines || []).join(', '),
-      publishedDate: r.publishedDate,
-    }));
+    // Run all searches in parallel
+    const [newsRes, recentRes, webRes, siteRes, archiveRes] = await Promise.all([
+      newsPromise, recentNewsPromise, webNewsPromise, siteSearchPromise, archiveNewsPromise
+    ]);
+
+    allResults.push(...(newsRes.data?.results || []));
+    allResults.push(...(recentRes.data?.results || []));
+    allResults.push(...(webRes.data?.results || []));
+    allResults.push(...(siteRes.data?.results || []));
+    allResults.push(...(archiveRes.data?.results || []));
+
   } catch (error: any) {
     console.error(`[SearXNG] News search error: ${error.message}`);
-    return [];
   }
+
+  // Deduplicate by URL
+  const unique = allResults.filter((item, index, self) =>
+    index === self.findIndex(t => t.url === item.url)
+  );
+
+  console.log(`[SearXNG] News search found ${unique.length} unique results`);
+
+  return unique.slice(0, num).map((r: any) => ({
+    url: r.url,
+    title: r.title,
+    content: r.content,
+    engine: r.engine || (r.engines || []).join(', '),
+    publishedDate: r.publishedDate,
+  }));
 }
 
 // Site-specific search (like site:example.com query)

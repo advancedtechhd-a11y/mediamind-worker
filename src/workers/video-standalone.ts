@@ -23,6 +23,15 @@ const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SE
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Blacklist of unrelated terms that indicate completely off-topic results
+const BLACKLIST_TERMS = [
+  'ufo', 'alien', 'fashion week', 'runway', 'model walk', 'cooking recipe',
+  'makeup tutorial', 'unboxing', 'asmr', 'minecraft', 'fortnite', 'gaming',
+  'crypto', 'bitcoin', 'nft', 'workout', 'yoga', 'meditation', 'mukbang',
+  'tiktok compilation', 'funny cats', 'funny dogs', 'prank', 'challenge',
+  'react to', 'reaction video'
+];
+
 // Check if a result is relevant to the topic
 function isRelevant(title: string, topic: string): boolean {
   if (!title || !topic) return false;
@@ -30,14 +39,29 @@ function isRelevant(title: string, topic: string): boolean {
   const titleLower = title.toLowerCase();
   const topicLower = topic.toLowerCase();
 
-  // Extract keywords from topic (words > 3 chars)
-  const keywords = topicLower.split(/\s+/).filter(word => word.length > 3);
+  // Check for blacklisted terms (completely unrelated content)
+  for (const blacklisted of BLACKLIST_TERMS) {
+    if (titleLower.includes(blacklisted) && !topicLower.includes(blacklisted)) {
+      return false;
+    }
+  }
 
-  // Check if at least one keyword appears in the title
+  // Extract keywords from topic (words > 2 chars, excluding common words)
+  const stopWords = ['the', 'and', 'for', 'was', 'were', 'are', 'how', 'what', 'who', 'when', 'where', 'why', 'did', 'does', 'has', 'have', 'had', 'been', 'being', 'with', 'from', 'about', 'into', 'that', 'this', 'these', 'those'];
+  const keywords = topicLower.split(/\s+/).filter(word => word.length > 2 && !stopWords.includes(word));
+
+  if (keywords.length === 0) return true; // If no keywords extracted, allow it
+
+  // Check how many keywords appear in the title
   const matchCount = keywords.filter(keyword => titleLower.includes(keyword)).length;
 
-  // Require at least 1 keyword match, or 30% of keywords for longer topics
-  const minMatches = Math.max(1, Math.floor(keywords.length * 0.3));
+  // Require at least 50% of keywords to match (stricter filtering)
+  const minMatches = Math.max(1, Math.ceil(keywords.length * 0.5));
+
+  // For 2-word topics like "Pablo Escobar", require BOTH words
+  if (keywords.length <= 2) {
+    return matchCount === keywords.length;
+  }
 
   return matchCount >= minMatches;
 }
@@ -137,14 +161,18 @@ async function searchArchiveOrg(topic: string, queries: string[]) {
           );
 
           if (videoFile) {
-            results.push({
-              url: `https://archive.org/download/${doc.identifier}/${videoFile.name}`,
-              title: doc.title || doc.identifier,
-              source: 'archive.org',
-              thumbnail: `https://archive.org/services/img/${doc.identifier}`,
-              priority: 1,
-              license: 'public_domain',
-            });
+            const title = doc.title || doc.identifier;
+            // RELEVANCE CHECK for Archive.org
+            if (isRelevant(title, topic)) {
+              results.push({
+                url: `https://archive.org/download/${doc.identifier}/${videoFile.name}`,
+                title: title,
+                source: 'archive.org',
+                thumbnail: `https://archive.org/services/img/${doc.identifier}`,
+                priority: 1,
+                license: 'public_domain',
+              });
+            }
           }
         } catch (e: any) { /* skip */ }
       }
@@ -257,7 +285,8 @@ async function searchHistoricalArchives(topic: string, queries: string[]) {
         const searchResults = await searchSite(archive.site, `${query} video film footage`, 15);
 
         for (const item of searchResults) {
-          if (isVideoUrl(item.url)) {
+          // RELEVANCE CHECK for historical archives
+          if (isVideoUrl(item.url) && isRelevant(item.title, topic)) {
             results.push({
               url: item.url,
               title: item.title,
@@ -297,7 +326,8 @@ async function searchNewsDocumentary(topic: string, queries: string[]) {
         const searchResults = await searchSite(source.site, query, 15);
 
         for (const item of searchResults) {
-          if (isVideoUrl(item.url)) {
+          // RELEVANCE CHECK for news/documentary
+          if (isVideoUrl(item.url) && isRelevant(item.title, topic)) {
             results.push({
               url: item.url,
               title: item.title,

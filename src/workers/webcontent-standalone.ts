@@ -47,27 +47,94 @@ async function initBrowser() {
 }
 
 // ============================================
-// COOKIE/POPUP DISMISSAL
+// COOKIE/POPUP/PAYWALL HANDLING
 // ============================================
 
+// Domains known to have hard paywalls - skip screenshot
+const PAYWALL_DOMAINS = [
+  'wsj.com', 'ft.com', 'economist.com', 'barrons.com', 'telegraph.co.uk',
+  'thetimes.co.uk', 'washingtonpost.com', 'nytimes.com', 'bostonglobe.com',
+  'latimes.com', 'chicagotribune.com', 'theathletic.com', 'hbr.org'
+];
+
+function hasPaywall(url: string): boolean {
+  try {
+    const domain = new URL(url).hostname.replace('www.', '');
+    return PAYWALL_DOMAINS.some(pw => domain.includes(pw));
+  } catch {
+    return false;
+  }
+}
+
 async function dismissCookiePopups(page: any): Promise<void> {
+  // Comprehensive list of cookie/consent selectors
   const dismissSelectors = [
+    // Accept buttons
     'button[id*="accept"]', 'button[class*="accept"]', 'button[class*="consent"]',
-    'button:has-text("Accept")', 'button:has-text("Accept All")', 'button:has-text("I Agree")',
+    'button:has-text("Accept")', 'button:has-text("Accept All")', 'button:has-text("Accept all")',
+    'button:has-text("Accept Cookies")', 'button:has-text("Accept cookies")',
+    'button:has-text("I Agree")', 'button:has-text("I agree")', 'button:has-text("Agree")',
     'button:has-text("OK")', 'button:has-text("Got it")', 'button:has-text("Allow")',
-    '#onetrust-accept-btn-handler', '.cc-accept', '.cc-dismiss',
-    '[aria-label="Close"]', '[aria-label="Dismiss"]', 'button[class*="close"]',
+    'button:has-text("Allow All")', 'button:has-text("Allow all")',
+    'button:has-text("Continue")', 'button:has-text("Confirm")',
+    'button:has-text("Yes")', 'button:has-text("Understood")',
+
+    // Common cookie banner IDs/classes
+    '#onetrust-accept-btn-handler', '#accept-cookies', '#cookie-accept',
+    '#gdpr-accept', '#consent-accept', '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
+    '.cc-accept', '.cc-dismiss', '.cc-btn', '.cookie-accept', '.gdpr-accept',
+    '[data-testid="cookie-accept"]', '[data-action="accept"]',
+
+    // Close buttons on modals
+    '[aria-label="Close"]', '[aria-label="Dismiss"]', '[aria-label="close"]',
+    'button[class*="close"]', '.modal-close', '.popup-close', '.overlay-close',
+
+    // Newsletter/subscription popups
+    'button:has-text("No thanks")', 'button:has-text("Not now")', 'button:has-text("Maybe later")',
+    'button:has-text("Skip")', 'button:has-text("Dismiss")', 'button:has-text("Close")',
+    '.newsletter-close', '.popup-dismiss', '.modal-dismiss',
+
+    // Age verification
+    'button:has-text("I am over 18")', 'button:has-text("Enter")', 'button:has-text("Yes, I am")',
   ];
 
   for (const selector of dismissSelectors) {
     try {
       const element = await page.$(selector);
-      if (element) {
+      if (element && await element.isVisible()) {
         await element.click();
-        await page.waitForTimeout(300);
+        await page.waitForTimeout(200);
       }
     } catch (e) { /* ignore */ }
   }
+
+  // Also try to hide common overlay elements via JavaScript injection
+  try {
+    await page.addScriptTag({
+      content: `
+        (function() {
+          var overlays = document.querySelectorAll(
+            '[class*="cookie"], [class*="consent"], [class*="gdpr"], [class*="modal"], ' +
+            '[class*="popup"], [class*="overlay"], [id*="cookie"], [id*="consent"], ' +
+            '[id*="gdpr"], [id*="modal"], [id*="popup"]'
+          );
+          overlays.forEach(function(el) {
+            if (el.style) {
+              el.style.display = 'none';
+              el.style.visibility = 'hidden';
+            }
+          });
+          document.querySelectorAll('[style*="position: fixed"]').forEach(function(el) {
+            var text = (el.innerText || '').toLowerCase();
+            if (text.indexOf('cookie') >= 0 || text.indexOf('privacy') >= 0 || text.indexOf('consent') >= 0 ||
+                text.indexOf('subscribe') >= 0 || text.indexOf('newsletter') >= 0) {
+              el.style.display = 'none';
+            }
+          });
+        })();
+      `
+    });
+  } catch (e) { /* ignore */ }
 }
 
 // ============================================
@@ -75,15 +142,39 @@ async function dismissCookiePopups(page: any): Promise<void> {
 // ============================================
 
 async function takeScreenshot(url: string, outputPath: string): Promise<boolean> {
+  // Skip known paywall sites
+  if (hasPaywall(url)) {
+    console.log(`[WebContent] Skipping paywall site: ${url}`);
+    return false;
+  }
+
   try {
     const b = await initBrowser();
     const page = await b.newPage();
 
+    // Set a realistic user agent
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9',
+    });
+
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-    await page.waitForTimeout(1500);
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25000 });
+
+    // Wait for page to render
+    await page.waitForTimeout(2000);
+
+    // Dismiss cookie popups (first pass)
     await dismissCookiePopups(page);
     await page.waitForTimeout(500);
+
+    // Scroll down slightly to trigger lazy loading and then back up
+    await page.mouse.wheel(0, 300);
+    await page.waitForTimeout(500);
+    await page.mouse.wheel(0, -300);
+
+    // Dismiss any popups that appeared after scrolling
+    await dismissCookiePopups(page);
+    await page.waitForTimeout(300);
 
     await page.screenshot({ path: outputPath, fullPage: false, type: 'jpeg', quality: 85 });
     await page.close();
@@ -182,9 +273,24 @@ async function searchAuthoritativeSources(topic: string, queries: string[]) {
   const results: any[] = [];
 
   const authSites = [
-    'wikipedia.org', 'britannica.com', 'history.com', 'bbc.com',
-    'cnn.com', 'nytimes.com', 'theguardian.com', 'reuters.com',
+    // Reference
+    'wikipedia.org', 'britannica.com', 'history.com',
+    // Major News
+    'bbc.com', 'cnn.com', 'nytimes.com', 'theguardian.com', 'reuters.com',
     'apnews.com', 'npr.org', 'washingtonpost.com', 'theatlantic.com',
+    // International News
+    'aljazeera.com', 'dw.com', 'france24.com', 'abc.net.au',
+    // US News
+    'usatoday.com', 'nbcnews.com', 'cbsnews.com', 'abcnews.go.com', 'foxnews.com',
+    'politico.com', 'axios.com', 'thehill.com', 'vox.com',
+    // UK News
+    'independent.co.uk', 'mirror.co.uk', 'dailymail.co.uk', 'express.co.uk',
+    // Business/Finance News
+    'bloomberg.com', 'cnbc.com', 'forbes.com', 'businessinsider.com',
+    // Tech News
+    'wired.com', 'theverge.com', 'arstechnica.com',
+    // Magazine/Long-form
+    'newyorker.com', 'time.com', 'newsweek.com', 'rollingstone.com',
   ];
 
   for (const site of authSites) {
