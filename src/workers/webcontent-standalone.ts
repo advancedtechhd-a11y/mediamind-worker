@@ -51,6 +51,73 @@ async function initBrowser() {
 }
 
 // ============================================
+// COOKIE/POPUP DISMISSAL
+// ============================================
+
+async function dismissCookiePopups(page: any): Promise<void> {
+  // Common cookie consent button selectors
+  const dismissSelectors = [
+    // Cookie consent - Accept buttons
+    'button[id*="accept"]',
+    'button[id*="cookie"]',
+    'button[class*="accept"]',
+    'button[class*="consent"]',
+    'button[class*="agree"]',
+    '[class*="cookie"] button',
+    '[class*="consent"] button',
+    '[class*="gdpr"] button',
+    '[id*="cookie"] button',
+    '[id*="consent"] button',
+    // Common text matches
+    'button:has-text("Accept")',
+    'button:has-text("Accept All")',
+    'button:has-text("Accept Cookies")',
+    'button:has-text("I Accept")',
+    'button:has-text("I Agree")',
+    'button:has-text("Agree")',
+    'button:has-text("OK")',
+    'button:has-text("Got it")',
+    'button:has-text("Allow")',
+    'button:has-text("Allow All")',
+    'button:has-text("Continue")',
+    'button:has-text("Reject Non-Essential")',
+    // Links that dismiss
+    'a:has-text("Accept")',
+    'a:has-text("I Accept")',
+    // Close buttons on modals
+    '[class*="modal"] [class*="close"]',
+    '[class*="popup"] [class*="close"]',
+    '[class*="banner"] [class*="close"]',
+    '[class*="notice"] [class*="close"]',
+    '[aria-label="Close"]',
+    '[aria-label="Dismiss"]',
+    'button[class*="close"]',
+    // Specific common frameworks
+    '#onetrust-accept-btn-handler',
+    '.onetrust-close-btn-handler',
+    '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
+    '#CybotCookiebotDialogBodyButtonAccept',
+    '.cc-accept',
+    '.cc-dismiss',
+    '#cookieConsent button',
+    '.cookie-notice button',
+    '.privacy-notice button',
+  ];
+
+  for (const selector of dismissSelectors) {
+    try {
+      const element = await page.$(selector);
+      if (element) {
+        await element.click();
+        await page.waitForTimeout(300);
+      }
+    } catch (e) {
+      // Ignore - button might not exist or be clickable
+    }
+  }
+}
+
+// ============================================
 // SCREENSHOT FUNCTION
 // ============================================
 
@@ -61,7 +128,11 @@ async function takeScreenshot(url: string, outputPath: string): Promise<boolean>
 
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1500);
+
+    // Dismiss cookie popups and banners
+    await dismissCookiePopups(page);
+    await page.waitForTimeout(500);
 
     await page.screenshot({
       path: outputPath,
