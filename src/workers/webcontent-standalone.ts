@@ -27,11 +27,23 @@ let browser: Browser | null = null;
 async function initBrowser() {
   if (!browser) {
     console.log('[WebContent] Launching Playwright browser...');
-    browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-    console.log('[WebContent] Browser ready');
+    try {
+      browser = await chromium.launch({
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--single-process'
+        ]
+      });
+      console.log('[WebContent] Browser ready');
+    } catch (error: any) {
+      console.error('[WebContent] Failed to launch browser:', error.message);
+      console.error('[WebContent] Full error:', error);
+      throw error;
+    }
   }
   return browser;
 }
