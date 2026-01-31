@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.40.0-jammy
+FROM node:20
 
 # Install ffmpeg
 RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
@@ -8,12 +8,11 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Use pre-installed browsers from Playwright image
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-
 # Install dependencies
 RUN npm install
+
+# Install Playwright browsers with system dependencies
+RUN npx playwright install --with-deps chromium
 
 # Copy source
 COPY . .
