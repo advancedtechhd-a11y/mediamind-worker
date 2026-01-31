@@ -265,11 +265,13 @@ app.get('/v1/project/:id', async (req, res) => {
 
 app.get('/health', async (req, res) => {
   const workerStatus: Record<string, string> = {};
+  const workerDetails: Record<string, any> = {};
 
   for (const [name, url] of Object.entries(WORKERS)) {
     try {
       const response = await axios.get(`${url}/health`, { timeout: 5000 });
       workerStatus[name] = response.data?.status || 'ok';
+      workerDetails[name] = response.data;
     } catch {
       workerStatus[name] = 'offline';
     }
@@ -279,6 +281,7 @@ app.get('/health', async (req, res) => {
     status: 'ok',
     service: 'mediamind-orchestrator',
     workers: workerStatus,
+    details: workerDetails,
   });
 });
 

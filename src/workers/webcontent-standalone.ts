@@ -22,6 +22,7 @@ const SERPER_API_KEY = process.env.SERPER_API_KEY;
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 let browser: Browser | null = null;
+let browserError: string | null = null;
 
 // Initialize browser on startup
 async function initBrowser() {
@@ -38,8 +39,10 @@ async function initBrowser() {
           '--single-process'
         ]
       });
+      browserError = null;
       console.log('[WebContent] Browser ready');
     } catch (error: any) {
+      browserError = error.message;
       console.error('[WebContent] Failed to launch browser:', error.message);
       console.error('[WebContent] Full error:', error);
       throw error;
@@ -388,7 +391,8 @@ app.get('/health', (req, res) => {
     status: browser ? 'ok' : 'degraded',
     worker: 'webcontent',
     port: PORT,
-    browser_ready: !!browser
+    browser_ready: !!browser,
+    browser_error: browserError
   });
 });
 
