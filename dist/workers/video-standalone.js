@@ -33,56 +33,12 @@ const BLACKLIST_TERMS = [
     'tiktok compilation', 'funny cats', 'funny dogs', 'prank', 'challenge',
     'react to', 'reaction video'
 ];
-// AI-generated keywords for relevance (set per request)
-let relevanceKeywords = [];
-// Set keywords from orchestrator (AI-generated)
-function setRelevanceKeywords(keywords) {
-    relevanceKeywords = keywords.map(k => k.toLowerCase());
-    console.log(`[Video] Using AI-generated keywords: ${relevanceKeywords.join(', ')}`);
-}
-// Check if a result is relevant using AI-generated keywords
-function isRelevant(title, topic) {
+// Simple blacklist check - sentence queries handle relevance
+function isBlacklisted(title) {
     if (!title)
         return false;
     const titleLower = title.toLowerCase();
-    const topicLower = (topic || '').toLowerCase();
-    // Check for blacklisted terms (completely unrelated content)
-    for (const blacklisted of BLACKLIST_TERMS) {
-        if (titleLower.includes(blacklisted) && !topicLower.includes(blacklisted)) {
-            return false;
-        }
-    }
-    // Use AI-generated keywords if available
-    if (relevanceKeywords.length > 0) {
-        // Check if ANY of the AI-generated keywords appear in the title
-        const matchCount = relevanceKeywords.filter(keyword => {
-            // Direct match
-            if (titleLower.includes(keyword))
-                return true;
-            // For multi-word keywords, check if all words appear
-            if (keyword.includes(' ')) {
-                const parts = keyword.split(' ');
-                return parts.every(part => titleLower.includes(part));
-            }
-            // For longer keywords, check partial match (root word)
-            if (keyword.length >= 6 && titleLower.includes(keyword.slice(0, 5)))
-                return true;
-            return false;
-        }).length;
-        // Need at least 1 keyword match from AI-generated list
-        return matchCount >= 1;
-    }
-    // Fallback: extract keywords from topic if no AI keywords provided
-    const stopWords = [
-        'the', 'and', 'for', 'was', 'were', 'are', 'how', 'what', 'who', 'when', 'where', 'why',
-        'did', 'does', 'has', 'have', 'had', 'been', 'being', 'with', 'from', 'about', 'into',
-        'that', 'this', 'these', 'those', 'happen', 'happened', 'explained', 'story'
-    ];
-    const keywords = topicLower.split(/\s+/).filter(word => word.length > 2 && !stopWords.includes(word));
-    if (keywords.length === 0)
-        return true;
-    const matchCount = keywords.filter(keyword => titleLower.includes(keyword)).length;
-    return matchCount >= 1;
+    return BLACKLIST_TERMS.some(term => titleLower.includes(term));
 }
 // Load sources config
 let sourcesConfig = null;
@@ -195,8 +151,8 @@ async function searchSearXNGVideos(topic, queries) {
         try {
             const searchResults = await searchVideos(`${query} historical footage documentary`, 50);
             for (const item of searchResults) {
-                // RELEVANCE CHECK: Only include if title matches topic
-                if (isVideoUrl(item.url) && isRelevant(item.title, topic)) {
+                // Simple blacklist check - sentence queries handle relevance
+                if (isVideoUrl(item.url) && !isBlacklisted(item.title)) {
                     results.push({
                         url: item.url,
                         title: item.title,
@@ -232,7 +188,7 @@ async function searchFreeStockVideo(topic, queries) {
                 const searchResults = await searchSite(stock.site, query, 15);
                 for (const item of searchResults) {
                     // RELEVANCE CHECK for stock sites
-                    if (isVideoUrl(item.url) && isRelevant(item.title, topic)) {
+                    if (isVideoUrl(item.url) && !isBlacklisted(item.title)) {
                         results.push({
                             url: item.url,
                             title: item.title,
@@ -357,7 +313,7 @@ async function searchStockFootage(topic, queries) {
                 const searchResults = await searchSite(stock.site, query, 15);
                 for (const item of searchResults) {
                     // RELEVANCE CHECK for stock footage
-                    if (isVideoUrl(item.url) && isRelevant(item.title, topic)) {
+                    if (isVideoUrl(item.url) && !isBlacklisted(item.title)) {
                         results.push({
                             url: item.url,
                             title: item.title,
@@ -389,7 +345,7 @@ async function searchWebVideos(topic, queries) {
                 if (excludedDomains.some(d => domain.includes(d)))
                     continue;
                 // RELEVANCE CHECK: Only include if title matches topic
-                if (isVideoUrl(item.url) && isRelevant(item.title, topic)) {
+                if (isVideoUrl(item.url) && !isBlacklisted(item.title)) {
                     results.push({
                         url: item.url,
                         title: item.title,
@@ -411,23 +367,15 @@ async function searchWebVideos(topic, queries) {
 // MAIN SEARCH ENDPOINT
 // ============================================
 app.post('/search', async (req, res) => {
-    const { projectId, topic, queries, keywords } = req.body;
+    const { projectId, topic, queries } = req.body;
     if (!topic) {
         return res.status(400).json({ error: 'Topic required' });
     }
-    // Set AI-generated keywords for relevance filtering
-    if (keywords && Array.isArray(keywords) && keywords.length > 0) {
-        setRelevanceKeywords(keywords);
-    }
-    else {
-        // Reset to empty so fallback logic is used
-        setRelevanceKeywords([]);
-    }
-    const searchQueries = queries || [topic];
+    // Sentence-based queries from orchestrator (e.g., "2008 financial crisis documentary")
+    const searchQueries = queries || [`${topic} documentary`, `${topic} footage`];
     console.log(`\n[Video Worker] Starting search for "${topic}"`);
-    console.log(`[Video Worker] Queries: ${searchQueries.join(', ')}`);
-    console.log(`[Video Worker] AI Keywords: ${keywords?.join(', ') || 'none (using fallback)'}`);
-    console.log(`[Video Worker] Using SearXNG (unlimited searches)`);
+    console.log(`[Video Worker] Sentence queries: ${searchQueries.join(' | ')}`);
+    console.log(`[Video Worker] Using sentence-based search (no keyword filtering)`);
     try {
         // Search all sources in parallel
         const [archive, searxngVideos, freeStock, historical, newsDoc, stockFootage, webVideos] = await Promise.all([

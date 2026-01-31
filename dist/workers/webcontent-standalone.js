@@ -8,7 +8,7 @@ import { chromium } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { searchNews as searxngNews, searchSite } from '../utils/searxng.js';
+import { searchSite } from '../utils/searxng.js';
 import { searchArticles as tavilySearch, searchNews as tavilyNews } from '../utils/tavily.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -188,55 +188,27 @@ async function uploadScreenshot(filePath, storagePath) {
 // ============================================
 // SEARCH SOURCES (Using SearXNG)
 // ============================================
-// 1. News Search (Using Tavily for better relevance)
-async function searchNewsArticles(topic, queries) {
+// 1. News Search (Using Tavily - AI handles relevance)
+async function searchNewsArticles(topic) {
     console.log('[WebContent] Searching news via Tavily...');
     const results = [];
-    // Use Tavily for primary news search (AI-optimized relevance)
-    for (const query of queries.slice(0, 3)) {
-        try {
-            const tavilyResults = await tavilyNews(query, 15);
-            for (const item of tavilyResults) {
-                results.push({
-                    url: item.url,
-                    title: item.title,
-                    source: 'tavily',
-                    snippet: item.content,
-                    date: item.publishedDate,
-                    type: 'news',
-                    score: item.score,
-                });
-            }
-        }
-        catch (e) {
-            console.error(`[WebContent] Tavily news error: ${e.message}`);
+    // Tavily handles the topic directly - no need to expand queries
+    try {
+        const tavilyResults = await tavilyNews(topic, 20);
+        for (const item of tavilyResults) {
+            results.push({
+                url: item.url,
+                title: item.title,
+                source: 'tavily',
+                snippet: item.content,
+                date: item.publishedDate,
+                type: 'news',
+                score: item.score,
+            });
         }
     }
-    // Fallback to SearXNG if Tavily returns few results
-    if (results.length < 10) {
-        console.log('[WebContent] Adding SearXNG news as backup...');
-        for (const query of queries.slice(0, 2)) {
-            try {
-                const searchResults = await searxngNews(query, 20);
-                for (const item of searchResults) {
-                    // Avoid duplicates
-                    if (!results.find(r => r.url === item.url)) {
-                        results.push({
-                            url: item.url,
-                            title: item.title,
-                            source: item.engine || 'searxng',
-                            snippet: item.content,
-                            date: item.publishedDate,
-                            type: 'news',
-                            score: 0.5, // Lower score for SearXNG results
-                        });
-                    }
-                }
-            }
-            catch (e) {
-                console.error(`[WebContent] SearXNG news error: ${e.message}`);
-            }
-        }
+    catch (e) {
+        console.error(`[WebContent] Tavily news error: ${e.message}`);
     }
     // Sort by relevance score
     results.sort((a, b) => (b.score || 0) - (a.score || 0));
@@ -324,29 +296,27 @@ async function searchAuthoritativeSources(topic, queries) {
     console.log(`[WebContent] Authoritative sources found: ${results.length}`);
     return results;
 }
-// 4. Blogs & Articles (Using Tavily for better relevance)
-async function searchBlogsAndArticles(topic, queries) {
+// 4. Blogs & Articles (Using Tavily - AI handles relevance)
+async function searchBlogsAndArticles(topic) {
     console.log('[WebContent] Searching blogs & articles via Tavily...');
     const results = [];
-    // Use Tavily for primary article search (AI-optimized relevance)
-    for (const query of queries.slice(0, 3)) {
-        try {
-            const tavilyResults = await tavilySearch(query, 15);
-            for (const item of tavilyResults) {
-                const domain = new URL(item.url).hostname.replace('www.', '');
-                results.push({
-                    url: item.url,
-                    title: item.title,
-                    source: domain,
-                    snippet: item.content,
-                    type: 'article',
-                    score: item.score,
-                });
-            }
+    // Tavily handles the topic directly - AI-optimized relevance
+    try {
+        const tavilyResults = await tavilySearch(topic, 20);
+        for (const item of tavilyResults) {
+            const domain = new URL(item.url).hostname.replace('www.', '');
+            results.push({
+                url: item.url,
+                title: item.title,
+                source: domain,
+                snippet: item.content,
+                type: 'article',
+                score: item.score,
+            });
         }
-        catch (e) {
-            console.error(`[WebContent] Tavily articles error: ${e.message}`);
-        }
+    }
+    catch (e) {
+        console.error(`[WebContent] Tavily articles error: ${e.message}`);
     }
     console.log(`[WebContent] Blogs/articles found: ${results.length}`);
     return results;
@@ -411,22 +381,21 @@ async function searchTopicSpecificSites(topic, queries, topicType) {
 // MAIN SEARCH ENDPOINT
 // ============================================
 app.post('/search', async (req, res) => {
-    const { projectId, topic, queries, topicType, takeScreenshots = true } = req.body;
+    const { projectId, topic, topicType, takeScreenshots = true } = req.body;
     if (!topic) {
         return res.status(400).json({ error: 'Topic required' });
     }
-    const searchQueries = queries || [topic];
     console.log(`\n[WebContent Worker] Starting search for "${topic}"`);
-    console.log(`[WebContent Worker] Queries: ${searchQueries.join(', ')}`);
-    console.log(`[WebContent Worker] Using SearXNG (unlimited searches)`);
+    console.log(`[WebContent Worker] Using Tavily (AI-optimized relevance)`);
     try {
-        // Search all sources in parallel
-        const [news, newspapers, authoritative, blogs, topicSpecific] = await Promise.all([
-            searchNewsArticles(topic, searchQueries),
-            searchHistoricalNewspapers(topic, searchQueries),
-            searchAuthoritativeSources(topic, searchQueries),
-            searchBlogsAndArticles(topic, searchQueries),
-            searchTopicSpecificSites(topic, searchQueries, topicType || 'general'),
+        // Search using Tavily for news and articles (AI handles relevance)
+        // Keep SearXNG for newspapers, authoritative sources, and topic-specific sites
+        const [news, blogs, newspapers, authoritative, topicSpecific] = await Promise.all([
+            searchNewsArticles(topic), // Tavily - AI optimized
+            searchBlogsAndArticles(topic), // Tavily - AI optimized
+            searchHistoricalNewspapers(topic, [topic]),
+            searchAuthoritativeSources(topic, [topic]),
+            searchTopicSpecificSites(topic, [topic], topicType || 'general'),
         ]);
         // Combine and deduplicate
         const allResults = [...news, ...newspapers, ...authoritative, ...blogs, ...topicSpecific];

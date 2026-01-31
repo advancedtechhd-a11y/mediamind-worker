@@ -52,45 +52,33 @@ async function generateSearchQueries(topic: string): Promise<{
   imageQueries: string[];
   webQueries: string[];
   topicType: string;
-  keywords: string[];
 }> {
-  console.log(`[Orchestrator] Generating expanded search queries for "${topic}"...`);
+  console.log(`[Orchestrator] Generating sentence-based queries for "${topic}"...`);
 
   try {
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
+      max_tokens: 1000,
       messages: [{
         role: 'user',
-        content: `You are a research query expansion expert. For the topic "${topic}", generate search queries that will find relevant media even when titles use DIFFERENT WORDS than the original topic.
+        content: `For the topic "${topic}", generate specific SENTENCE-based search queries.
 
-CRITICAL: Think about SYNONYMS, ALTERNATE NAMES, RELATED EVENTS, KEY PEOPLE, and how media titles actually phrase things.
+IMPORTANT: Generate FULL SENTENCES, not individual keywords. Each query should be specific and descriptive.
 
-Example expansion for "2008 recession":
-- "2008 financial crisis" (synonym)
-- "subprime mortgage collapse" (related cause)
-- "Lehman Brothers bankruptcy" (key event)
-- "housing market crash 2008" (related term)
-- "Great Recession documentary" (alternate name)
-- "Wall Street bailout 2008" (related event)
-- "Bear Stearns collapse" (key event)
+Example for "2008 recession":
+- "2008 financial crisis documentary explaining the causes"
+- "Lehman Brothers collapse and bankruptcy footage"
+- "subprime mortgage crisis housing market crash"
+- "Wall Street bailout 2008 government response"
 
-Return a JSON object:
+Return JSON:
 {
-  "videoQueries": [8-10 queries for videos/documentaries/footage - use synonyms and related terms],
-  "imageQueries": [8-10 queries for photos/images - include key people, places, events],
-  "webQueries": [8-10 queries for articles/news - cover different angles and related topics],
-  "topicType": "history" | "crime" | "celebrity" | "finance" | "politics" | "science" | "military" | "disaster" | "general",
-  "keywords": [10-15 individual keywords/phrases that should appear in relevant results - these are used for relevance filtering]
+  "videoQueries": [5 specific sentence queries for finding relevant video footage and documentaries],
+  "imageQueries": [5 specific sentence queries for finding relevant historical photos and images],
+  "topicType": "history" | "crime" | "celebrity" | "finance" | "politics" | "science" | "military" | "disaster" | "general"
 }
 
-The "keywords" array is CRITICAL - include:
-- Main topic words and their synonyms
-- Names of key people involved
-- Names of key places/organizations
-- Related events/terms
-- Common words used in titles about this topic
-
+Make each query SPECIFIC - include the main topic plus context words.
 Return ONLY valid JSON.`
       }]
     });
@@ -100,26 +88,32 @@ Return ONLY valid JSON.`
 
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
-      console.log(`[Orchestrator] Generated expanded queries:`, JSON.stringify(parsed, null, 2));
+      console.log(`[Orchestrator] Generated queries:`, JSON.stringify(parsed, null, 2));
       return {
-        videoQueries: parsed.videoQueries || [topic],
-        imageQueries: parsed.imageQueries || [topic],
-        webQueries: parsed.webQueries || [topic],
+        videoQueries: parsed.videoQueries || [`${topic} documentary`, `${topic} footage explained`],
+        imageQueries: parsed.imageQueries || [`${topic} historical photos`, `${topic} images`],
+        webQueries: [topic], // Tavily handles this directly - no expansion needed
         topicType: parsed.topicType || 'general',
-        keywords: parsed.keywords || topic.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3),
       };
     }
   } catch (error: any) {
     console.error(`[Orchestrator] Claude query generation failed: ${error.message}`);
   }
 
-  // Fallback to basic queries
+  // Fallback to sentence-based queries
   return {
-    videoQueries: [topic, `${topic} documentary`, `${topic} footage`, `${topic} explained`],
-    imageQueries: [topic, `${topic} photo`, `${topic} historical`, `${topic} images`],
-    webQueries: [topic, `${topic} article`, `${topic} history`, `${topic} explained`],
+    videoQueries: [
+      `${topic} documentary explaining`,
+      `${topic} historical footage`,
+      `${topic} news coverage report`,
+    ],
+    imageQueries: [
+      `${topic} historical photographs`,
+      `${topic} archival images`,
+      `${topic} photos documentary`,
+    ],
+    webQueries: [topic], // Tavily handles directly
     topicType: 'general',
-    keywords: topic.toLowerCase().split(/\s+/).filter(w => w.length > 3),
   };
 }
 
@@ -178,35 +172,31 @@ app.post('/v1/research', async (req, res) => {
         console.log(`[Orchestrator] Starting all 4 workers in parallel...`);
 
         const workerPromises = [
-          // Video Worker
+          // Video Worker - uses sentence-based queries
           axios.post(`${WORKERS.video}/search`, {
             projectId,
             topic,
-            queries: queries.videoQueries,
-            keywords: queries.keywords, // AI-generated relevance keywords
+            queries: queries.videoQueries, // Sentence queries like "2008 financial crisis documentary"
           }, { timeout: 300000 }).catch(e => {
             console.log(`[Orchestrator] Video worker error: ${e.message}`);
             return { data: { count: 0 } };
           }),
 
-          // Image Worker
+          // Image Worker - uses sentence-based queries
           axios.post(`${WORKERS.image}/search`, {
             projectId,
             topic,
-            queries: queries.imageQueries,
-            keywords: queries.keywords,
+            queries: queries.imageQueries, // Sentence queries like "2008 recession historical photos"
           }, { timeout: 300000 }).catch(e => {
             console.log(`[Orchestrator] Image worker error: ${e.message}`);
             return { data: { count: 0 } };
           }),
 
-          // Web Content Worker
+          // Web Content Worker - Tavily handles topic directly (AI-optimized)
           axios.post(`${WORKERS.webcontent}/search`, {
             projectId,
-            topic,
-            queries: queries.webQueries,
+            topic, // Tavily searches this directly - no query expansion needed
             topicType: queries.topicType,
-            keywords: queries.keywords,
             takeScreenshots: true,
           }, { timeout: 600000 }).catch(e => {
             console.log(`[Orchestrator] WebContent worker error: ${e.message}`);
