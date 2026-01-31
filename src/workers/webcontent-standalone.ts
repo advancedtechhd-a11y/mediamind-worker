@@ -2,6 +2,9 @@
 // Searches ANY website → Takes screenshots using Playwright
 // News, blogs, databases, forums, reports, etc.
 
+// MUST set browser path BEFORE importing Playwright
+process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH || '/app/.playwright-browsers';
+
 import 'dotenv/config';
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
@@ -23,9 +26,6 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 let browser: Browser | null = null;
 let browserError: string | null = null;
-
-// Set browser path before any Playwright operations
-process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH || '/app/.playwright-browsers';
 
 // Initialize browser on startup
 async function initBrowser() {
