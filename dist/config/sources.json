@@ -1,0 +1,776 @@
+{
+  "video": {
+    "tier1_public_domain": [
+      {
+        "name": "Archive.org",
+        "site": "archive.org",
+        "searchPattern": "site:archive.org/details",
+        "priority": 1,
+        "api": "https://archive.org/advancedsearch.php",
+        "type": "api"
+      },
+      {
+        "name": "Wikimedia Commons Video",
+        "site": "commons.wikimedia.org",
+        "searchPattern": "site:commons.wikimedia.org/wiki/File: filetype:ogv OR filetype:webm OR filetype:mp4",
+        "priority": 1,
+        "type": "search"
+      },
+      {
+        "name": "Prelinger Archives",
+        "site": "archive.org/details/prelinger",
+        "searchPattern": "site:archive.org/details/prelinger",
+        "priority": 1,
+        "type": "search"
+      },
+      {
+        "name": "Library of Congress Film",
+        "site": "loc.gov/collections/films",
+        "searchPattern": "site:loc.gov/item film OR video OR motion",
+        "priority": 1,
+        "type": "search"
+      },
+      {
+        "name": "National Archives Video",
+        "site": "catalog.archives.gov",
+        "searchPattern": "site:catalog.archives.gov video OR film OR motion",
+        "priority": 1,
+        "type": "search"
+      }
+    ],
+    "tier2_creative_commons": [
+      {
+        "name": "Pexels Video",
+        "site": "pexels.com/videos",
+        "searchPattern": "site:pexels.com/video",
+        "priority": 2,
+        "type": "search"
+      },
+      {
+        "name": "Pixabay Video",
+        "site": "pixabay.com/videos",
+        "searchPattern": "site:pixabay.com/videos",
+        "priority": 2,
+        "type": "search"
+      },
+      {
+        "name": "Videvo",
+        "site": "videvo.net",
+        "searchPattern": "site:videvo.net",
+        "priority": 2,
+        "type": "search"
+      },
+      {
+        "name": "Coverr",
+        "site": "coverr.co",
+        "searchPattern": "site:coverr.co",
+        "priority": 2,
+        "type": "search"
+      },
+      {
+        "name": "Mixkit",
+        "site": "mixkit.co",
+        "searchPattern": "site:mixkit.co/free-stock-video",
+        "priority": 2,
+        "type": "search"
+      },
+      {
+        "name": "Life of Vids",
+        "site": "lifeofvids.com",
+        "searchPattern": "site:lifeofvids.com",
+        "priority": 2,
+        "type": "search"
+      }
+    ],
+    "tier3_historical_archives": [
+      {
+        "name": "British Pathé",
+        "site": "britishpathe.com",
+        "searchPattern": "site:britishpathe.com/asset",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "C-SPAN Video",
+        "site": "c-span.org/video",
+        "searchPattern": "site:c-span.org/video",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "AP Archive",
+        "site": "aparchive.com",
+        "searchPattern": "site:aparchive.com/metadata",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "Reuters Archive",
+        "site": "reuters.com/video",
+        "searchPattern": "site:reuters.com video archive",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "ITN Source",
+        "site": "itnsource.com",
+        "searchPattern": "site:itnsource.com",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "Critical Past",
+        "site": "criticalpast.com",
+        "searchPattern": "site:criticalpast.com",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "Footage Farm",
+        "site": "footagefarm.com",
+        "searchPattern": "site:footagefarm.com",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "Historic Films",
+        "site": "historicfilms.com",
+        "searchPattern": "site:historicfilms.com",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "NBC News Archives",
+        "site": "nbcnewsarchives.com",
+        "searchPattern": "site:nbcnewsarchives.com",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "CBS News Archives",
+        "site": "cbsnews.com/video",
+        "searchPattern": "site:cbsnews.com/video",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "ABC News Video",
+        "site": "abcnews.go.com/video",
+        "searchPattern": "site:abcnews.go.com video archive",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "BBC Archive",
+        "site": "bbc.com/archive",
+        "searchPattern": "site:bbc.com video archive footage",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "Europeana Video",
+        "site": "europeana.eu",
+        "searchPattern": "site:europeana.eu video OR film",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "BFI National Archive",
+        "site": "bfi.org.uk",
+        "searchPattern": "site:bfi.org.uk/archive",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "German Federal Archives",
+        "site": "filmothek.bundesarchiv.de",
+        "searchPattern": "site:filmothek.bundesarchiv.de",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "INA.fr (French Archives)",
+        "site": "ina.fr",
+        "searchPattern": "site:ina.fr video",
+        "priority": 3,
+        "type": "search"
+      }
+    ],
+    "tier4_news_documentary": [
+      {
+        "name": "History Channel",
+        "site": "history.com/videos",
+        "searchPattern": "site:history.com/videos",
+        "priority": 4,
+        "type": "search"
+      },
+      {
+        "name": "Documentary Storm",
+        "site": "documentarystorm.com",
+        "searchPattern": "site:documentarystorm.com",
+        "priority": 4,
+        "type": "search"
+      },
+      {
+        "name": "Top Documentary Films",
+        "site": "topdocumentaryfilms.com",
+        "searchPattern": "site:topdocumentaryfilms.com",
+        "priority": 4,
+        "type": "search"
+      },
+      {
+        "name": "Smithsonian Channel",
+        "site": "smithsonianchannel.com",
+        "searchPattern": "site:smithsonianchannel.com/videos",
+        "priority": 4,
+        "type": "search"
+      },
+      {
+        "name": "National Geographic Video",
+        "site": "nationalgeographic.com/videos",
+        "searchPattern": "site:nationalgeographic.com/videos",
+        "priority": 4,
+        "type": "search"
+      },
+      {
+        "name": "PBS Video",
+        "site": "pbs.org/video",
+        "searchPattern": "site:pbs.org/video",
+        "priority": 4,
+        "type": "search"
+      }
+    ],
+    "tier5_stock_footage": [
+      {
+        "name": "Getty Images Video",
+        "site": "gettyimages.com/videos",
+        "searchPattern": "site:gettyimages.com/detail/video",
+        "priority": 5,
+        "type": "search",
+        "license": "editorial"
+      },
+      {
+        "name": "Shutterstock Video",
+        "site": "shutterstock.com/video",
+        "searchPattern": "site:shutterstock.com/video",
+        "priority": 5,
+        "type": "search",
+        "license": "commercial"
+      },
+      {
+        "name": "Pond5",
+        "site": "pond5.com",
+        "searchPattern": "site:pond5.com",
+        "priority": 5,
+        "type": "search",
+        "license": "commercial"
+      },
+      {
+        "name": "Artgrid",
+        "site": "artgrid.io",
+        "searchPattern": "site:artgrid.io",
+        "priority": 5,
+        "type": "search",
+        "license": "commercial"
+      },
+      {
+        "name": "Storyblocks",
+        "site": "storyblocks.com/video",
+        "searchPattern": "site:storyblocks.com/video",
+        "priority": 5,
+        "type": "search",
+        "license": "commercial"
+      }
+    ]
+  },
+  "image": {
+    "tier1_public_domain": [
+      {
+        "name": "Archive.org Images",
+        "site": "archive.org",
+        "searchPattern": "site:archive.org/details",
+        "priority": 1,
+        "type": "api"
+      },
+      {
+        "name": "Wikimedia Commons",
+        "site": "commons.wikimedia.org",
+        "searchPattern": "site:commons.wikimedia.org/wiki/File:",
+        "priority": 1,
+        "type": "search"
+      },
+      {
+        "name": "Library of Congress Prints",
+        "site": "loc.gov/pictures",
+        "searchPattern": "site:loc.gov/pictures",
+        "priority": 1,
+        "type": "search"
+      },
+      {
+        "name": "National Archives Photos",
+        "site": "catalog.archives.gov",
+        "searchPattern": "site:catalog.archives.gov photograph OR image",
+        "priority": 1,
+        "type": "search"
+      },
+      {
+        "name": "Rawpixel Public Domain",
+        "site": "rawpixel.com/public-domain",
+        "searchPattern": "site:rawpixel.com public domain",
+        "priority": 1,
+        "type": "search"
+      },
+      {
+        "name": "NYPL Digital Collections",
+        "site": "digitalcollections.nypl.org",
+        "searchPattern": "site:digitalcollections.nypl.org",
+        "priority": 1,
+        "type": "search"
+      },
+      {
+        "name": "Biodiversity Heritage Library",
+        "site": "biodiversitylibrary.org",
+        "searchPattern": "site:biodiversitylibrary.org",
+        "priority": 1,
+        "type": "search"
+      },
+      {
+        "name": "Wellcome Collection",
+        "site": "wellcomecollection.org",
+        "searchPattern": "site:wellcomecollection.org/images",
+        "priority": 1,
+        "type": "search"
+      },
+      {
+        "name": "Old Book Illustrations",
+        "site": "oldbookillustrations.com",
+        "searchPattern": "site:oldbookillustrations.com",
+        "priority": 1,
+        "type": "search"
+      }
+    ],
+    "tier2_creative_commons": [
+      {
+        "name": "Unsplash",
+        "site": "unsplash.com",
+        "searchPattern": "site:unsplash.com/photos",
+        "priority": 2,
+        "type": "search"
+      },
+      {
+        "name": "Pexels",
+        "site": "pexels.com",
+        "searchPattern": "site:pexels.com/photo",
+        "priority": 2,
+        "type": "search"
+      },
+      {
+        "name": "Pixabay",
+        "site": "pixabay.com",
+        "searchPattern": "site:pixabay.com/photos",
+        "priority": 2,
+        "type": "search"
+      },
+      {
+        "name": "Flickr Commons",
+        "site": "flickr.com/commons",
+        "searchPattern": "site:flickr.com/photos license:commons",
+        "priority": 2,
+        "type": "search"
+      },
+      {
+        "name": "StockSnap",
+        "site": "stocksnap.io",
+        "searchPattern": "site:stocksnap.io",
+        "priority": 2,
+        "type": "search"
+      },
+      {
+        "name": "Burst by Shopify",
+        "site": "burst.shopify.com",
+        "searchPattern": "site:burst.shopify.com",
+        "priority": 2,
+        "type": "search"
+      },
+      {
+        "name": "Kaboompics",
+        "site": "kaboompics.com",
+        "searchPattern": "site:kaboompics.com",
+        "priority": 2,
+        "type": "search"
+      },
+      {
+        "name": "Reshot",
+        "site": "reshot.com",
+        "searchPattern": "site:reshot.com",
+        "priority": 2,
+        "type": "search"
+      },
+      {
+        "name": "ISO Republic",
+        "site": "isorepublic.com",
+        "searchPattern": "site:isorepublic.com",
+        "priority": 2,
+        "type": "search"
+      },
+      {
+        "name": "Gratisography",
+        "site": "gratisography.com",
+        "searchPattern": "site:gratisography.com",
+        "priority": 2,
+        "type": "search"
+      }
+    ],
+    "tier3_museums": [
+      {
+        "name": "Smithsonian Open Access",
+        "site": "si.edu",
+        "searchPattern": "site:si.edu/openaccess",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "Met Museum Open Access",
+        "site": "metmuseum.org",
+        "searchPattern": "site:metmuseum.org/art/collection",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "Getty Museum",
+        "site": "getty.edu",
+        "searchPattern": "site:getty.edu/art/collection",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "Rijksmuseum",
+        "site": "rijksmuseum.nl",
+        "searchPattern": "site:rijksmuseum.nl/en/collection",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "British Museum",
+        "site": "britishmuseum.org",
+        "searchPattern": "site:britishmuseum.org/collection",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "Europeana",
+        "site": "europeana.eu",
+        "searchPattern": "site:europeana.eu/item",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "Paris Musées",
+        "site": "parismuseescollections.paris.fr",
+        "searchPattern": "site:parismuseescollections.paris.fr",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "Art Institute Chicago",
+        "site": "artic.edu",
+        "searchPattern": "site:artic.edu/artworks",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "Cleveland Museum of Art",
+        "site": "clevelandart.org",
+        "searchPattern": "site:clevelandart.org/art",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "National Gallery of Art",
+        "site": "nga.gov",
+        "searchPattern": "site:nga.gov/collection",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "Yale University Art Gallery",
+        "site": "artgallery.yale.edu",
+        "searchPattern": "site:artgallery.yale.edu/collection",
+        "priority": 3,
+        "type": "search"
+      },
+      {
+        "name": "MoMA",
+        "site": "moma.org",
+        "searchPattern": "site:moma.org/collection",
+        "priority": 3,
+        "type": "search"
+      }
+    ],
+    "tier4_historical": [
+      {
+        "name": "World History Archive",
+        "site": "worldhistoryarchive.com",
+        "searchPattern": "site:worldhistoryarchive.com",
+        "priority": 4,
+        "type": "search"
+      },
+      {
+        "name": "Shorpy Historical Photos",
+        "site": "shorpy.com",
+        "searchPattern": "site:shorpy.com",
+        "priority": 4,
+        "type": "search"
+      },
+      {
+        "name": "Vintage Images",
+        "site": "vintag.es",
+        "searchPattern": "site:vintag.es",
+        "priority": 4,
+        "type": "search"
+      },
+      {
+        "name": "Rare Historical Photos",
+        "site": "rarehistoricalphotos.com",
+        "searchPattern": "site:rarehistoricalphotos.com",
+        "priority": 4,
+        "type": "search"
+      },
+      {
+        "name": "History in Pictures",
+        "site": "historyinpictures.com",
+        "searchPattern": "site:historyinpictures.com",
+        "priority": 4,
+        "type": "search"
+      },
+      {
+        "name": "Old Photos Archive",
+        "site": "oldphotoarchive.com",
+        "searchPattern": "site:oldphotoarchive.com",
+        "priority": 4,
+        "type": "search"
+      }
+    ],
+    "tier5_stock": [
+      {
+        "name": "Getty Images",
+        "site": "gettyimages.com",
+        "searchPattern": "site:gettyimages.com",
+        "priority": 5,
+        "type": "search",
+        "license": "editorial"
+      },
+      {
+        "name": "Shutterstock",
+        "site": "shutterstock.com",
+        "searchPattern": "site:shutterstock.com",
+        "priority": 5,
+        "type": "search",
+        "license": "commercial"
+      },
+      {
+        "name": "Alamy",
+        "site": "alamy.com",
+        "searchPattern": "site:alamy.com",
+        "priority": 5,
+        "type": "search",
+        "license": "editorial"
+      },
+      {
+        "name": "Adobe Stock",
+        "site": "stock.adobe.com",
+        "searchPattern": "site:stock.adobe.com",
+        "priority": 5,
+        "type": "search",
+        "license": "commercial"
+      }
+    ]
+  },
+  "webcontent": {
+    "news": [
+      {
+        "name": "Google News",
+        "type": "api",
+        "endpoint": "https://google.serper.dev/news",
+        "priority": 1
+      }
+    ],
+    "historical_newspapers": [
+      {
+        "name": "Chronicling America",
+        "site": "chroniclingamerica.loc.gov",
+        "searchPattern": "site:chroniclingamerica.loc.gov",
+        "priority": 1
+      },
+      {
+        "name": "Newspapers.com",
+        "site": "newspapers.com",
+        "searchPattern": "site:newspapers.com",
+        "priority": 2
+      },
+      {
+        "name": "Google News Archive",
+        "site": "news.google.com/newspapers",
+        "searchPattern": "site:news.google.com/newspapers",
+        "priority": 2
+      },
+      {
+        "name": "Newspaper Archive",
+        "site": "newspaperarchive.com",
+        "searchPattern": "site:newspaperarchive.com",
+        "priority": 3
+      },
+      {
+        "name": "British Newspaper Archive",
+        "site": "britishnewspaperarchive.co.uk",
+        "searchPattern": "site:britishnewspaperarchive.co.uk",
+        "priority": 3
+      },
+      {
+        "name": "Trove (Australia)",
+        "site": "trove.nla.gov.au/newspaper",
+        "searchPattern": "site:trove.nla.gov.au/newspaper",
+        "priority": 3
+      },
+      {
+        "name": "Fulton History (NY)",
+        "site": "fultonhistory.com",
+        "searchPattern": "site:fultonhistory.com",
+        "priority": 3
+      },
+      {
+        "name": "California Digital Newspaper",
+        "site": "cdnc.ucr.edu",
+        "searchPattern": "site:cdnc.ucr.edu",
+        "priority": 3
+      }
+    ],
+    "authoritative": [
+      {
+        "name": "Wikipedia",
+        "site": "wikipedia.org",
+        "searchPattern": "site:en.wikipedia.org",
+        "priority": 1
+      },
+      {
+        "name": "Britannica",
+        "site": "britannica.com",
+        "searchPattern": "site:britannica.com",
+        "priority": 1
+      },
+      {
+        "name": "History.com",
+        "site": "history.com",
+        "searchPattern": "site:history.com",
+        "priority": 2
+      },
+      {
+        "name": "BBC",
+        "site": "bbc.com",
+        "searchPattern": "site:bbc.com",
+        "priority": 2
+      },
+      {
+        "name": "CNN",
+        "site": "cnn.com",
+        "searchPattern": "site:cnn.com",
+        "priority": 2
+      },
+      {
+        "name": "NYTimes",
+        "site": "nytimes.com",
+        "searchPattern": "site:nytimes.com",
+        "priority": 2
+      },
+      {
+        "name": "The Guardian",
+        "site": "theguardian.com",
+        "searchPattern": "site:theguardian.com",
+        "priority": 2
+      },
+      {
+        "name": "Reuters",
+        "site": "reuters.com",
+        "searchPattern": "site:reuters.com",
+        "priority": 2
+      },
+      {
+        "name": "AP News",
+        "site": "apnews.com",
+        "searchPattern": "site:apnews.com",
+        "priority": 2
+      },
+      {
+        "name": "NPR",
+        "site": "npr.org",
+        "searchPattern": "site:npr.org",
+        "priority": 2
+      },
+      {
+        "name": "Washington Post",
+        "site": "washingtonpost.com",
+        "searchPattern": "site:washingtonpost.com",
+        "priority": 2
+      },
+      {
+        "name": "The Atlantic",
+        "site": "theatlantic.com",
+        "searchPattern": "site:theatlantic.com",
+        "priority": 2
+      }
+    ],
+    "niche_specific": {
+      "crime": [
+        { "site": "fbi.gov", "name": "FBI" },
+        { "site": "justice.gov", "name": "DOJ" },
+        { "site": "courtlistener.com", "name": "CourtListener" },
+        { "site": "law.cornell.edu", "name": "Cornell Law" },
+        { "site": "caselaw.findlaw.com", "name": "FindLaw" }
+      ],
+      "celebrity": [
+        { "site": "imdb.com", "name": "IMDb" },
+        { "site": "people.com", "name": "People" },
+        { "site": "biography.com", "name": "Biography" },
+        { "site": "eonline.com", "name": "E! News" }
+      ],
+      "history": [
+        { "site": "history.com", "name": "History" },
+        { "site": "historynet.com", "name": "HistoryNet" },
+        { "site": "worldhistory.org", "name": "World History" },
+        { "site": "militaryhistorynow.com", "name": "Military History Now" }
+      ],
+      "real_estate": [
+        { "site": "zillow.com", "name": "Zillow" },
+        { "site": "realtor.com", "name": "Realtor" },
+        { "site": "redfin.com", "name": "Redfin" },
+        { "site": "trulia.com", "name": "Trulia" }
+      ],
+      "finance": [
+        { "site": "bloomberg.com", "name": "Bloomberg" },
+        { "site": "marketwatch.com", "name": "MarketWatch" },
+        { "site": "investopedia.com", "name": "Investopedia" },
+        { "site": "wsj.com", "name": "WSJ" }
+      ],
+      "horror": [
+        { "site": "bloody-disgusting.com", "name": "Bloody Disgusting" },
+        { "site": "dreadcentral.com", "name": "Dread Central" },
+        { "site": "imdb.com", "name": "IMDb" }
+      ],
+      "sports": [
+        { "site": "espn.com", "name": "ESPN" },
+        { "site": "sports-reference.com", "name": "Sports Reference" },
+        { "site": "bleacherreport.com", "name": "Bleacher Report" }
+      ],
+      "military": [
+        { "site": "defense.gov", "name": "DoD" },
+        { "site": "militarytimes.com", "name": "Military Times" },
+        { "site": "warhistoryonline.com", "name": "War History" }
+      ],
+      "science": [
+        { "site": "nasa.gov", "name": "NASA" },
+        { "site": "nature.com", "name": "Nature" },
+        { "site": "scientificamerican.com", "name": "Scientific American" }
+      ]
+    }
+  }
+}

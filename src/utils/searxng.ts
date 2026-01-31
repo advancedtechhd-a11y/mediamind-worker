@@ -117,13 +117,12 @@ export async function searchNews(query: string, num: number = 50): Promise<Searc
       timeout: 20000,
     }).catch(() => ({ data: { results: [] } }));
 
-    // Strategy 2: News with date qualifiers
+    // Strategy 2: News with different phrasing
     const recentNewsPromise = axios.get(`${SEARXNG_URL}/search`, {
       params: {
-        q: `${query} news`,
+        q: `${query} latest news report`,
         format: 'json',
         categories: 'news',
-        time_range: 'year',
       },
       timeout: 20000,
     }).catch(() => ({ data: { results: [] } }));

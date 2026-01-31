@@ -46,21 +46,38 @@ function isRelevant(title: string, topic: string): boolean {
     }
   }
 
-  // Extract keywords from topic (words > 2 chars, excluding common words)
-  const stopWords = ['the', 'and', 'for', 'was', 'were', 'are', 'how', 'what', 'who', 'when', 'where', 'why', 'did', 'does', 'has', 'have', 'had', 'been', 'being', 'with', 'from', 'about', 'into', 'that', 'this', 'these', 'those'];
+  // Extract keywords from topic (words > 2 chars, excluding common/filler words)
+  const stopWords = [
+    'the', 'and', 'for', 'was', 'were', 'are', 'how', 'what', 'who', 'when', 'where', 'why',
+    'did', 'does', 'has', 'have', 'had', 'been', 'being', 'with', 'from', 'about', 'into',
+    'that', 'this', 'these', 'those', 'happen', 'happened', 'happens', 'happening',
+    'start', 'started', 'starts', 'begin', 'began', 'become', 'became', 'make', 'made',
+    'explained', 'explain', 'story', 'history', 'documentary', 'video', 'full', 'complete'
+  ];
   const keywords = topicLower.split(/\s+/).filter(word => word.length > 2 && !stopWords.includes(word));
 
   if (keywords.length === 0) return true; // If no keywords extracted, allow it
 
-  // Check how many keywords appear in the title
-  const matchCount = keywords.filter(keyword => titleLower.includes(keyword)).length;
+  // Check how many keywords appear in the title (also check for partial matches for longer words)
+  const matchCount = keywords.filter(keyword => {
+    // Direct match
+    if (titleLower.includes(keyword)) return true;
+    // For words 6+ chars, check if title contains the root (first 5 chars)
+    if (keyword.length >= 6 && titleLower.includes(keyword.slice(0, 5))) return true;
+    return false;
+  }).length;
 
-  // Require at least 50% of keywords to match (stricter filtering)
-  const minMatches = Math.max(1, Math.ceil(keywords.length * 0.5));
+  // Require at least 35% of keywords to match (balanced filtering)
+  const minMatches = Math.max(1, Math.ceil(keywords.length * 0.35));
 
-  // For 2-word topics like "Pablo Escobar", require BOTH words
-  if (keywords.length <= 2) {
-    return matchCount === keywords.length;
+  // For single important keyword topics, just need that one word
+  if (keywords.length === 1) {
+    return matchCount >= 1;
+  }
+
+  // For 2-word topics, need at least 1 match
+  if (keywords.length === 2) {
+    return matchCount >= 1;
   }
 
   return matchCount >= minMatches;
