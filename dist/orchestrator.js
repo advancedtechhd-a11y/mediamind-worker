@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
 import Anthropic from '@anthropic-ai/sdk';
+import { checkQwenHealth, checkWhisperHealth } from './services/modal.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
@@ -265,10 +266,19 @@ app.get('/health', async (req, res) => {
             workerStatus[name] = 'offline';
         }
     }
+    // Check Modal services (Qwen and Whisper)
+    const [qwenHealthy, whisperHealthy] = await Promise.all([
+        checkQwenHealth().catch(() => false),
+        checkWhisperHealth().catch(() => false),
+    ]);
     res.json({
         status: 'ok',
         service: 'mediamind-orchestrator',
         workers: workerStatus,
+        modalServices: {
+            qwenVision: qwenHealthy ? 'ok' : 'offline',
+            whisperTranscribe: whisperHealthy ? 'ok' : 'offline',
+        },
         details: workerDetails,
     });
 });

@@ -16,5 +16,17 @@ export declare function validateImageRelevance(topic: string, imageUrl: string):
     score: number;
     description: string;
 }>;
+/**
+ * Validate multiple images in batch using Qwen (more efficient)
+ */
+export declare function validateImageBatch(topic: string, imageUrls: Array<{
+    url: string;
+    id: string;
+}>): Promise<Array<{
+    id: string;
+    relevant: boolean;
+    score: number;
+    description: string;
+}>>;
 export {};
 //# sourceMappingURL=claude.d.ts.map

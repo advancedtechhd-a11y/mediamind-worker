@@ -3,6 +3,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import axios from 'axios';
 import fs from 'fs';
+import { analyzeImageWithQwen, analyzeImageBatchWithQwen } from './modal.js';
+// Use Qwen for image analysis by default (97% cheaper)
+const USE_QWEN_FOR_IMAGES = process.env.USE_QWEN_FOR_IMAGES !== 'false';
 const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
 });
@@ -158,6 +161,60 @@ If nothing relevant, return: { "ranges": [] }`,
 // VALIDATE IMAGE RELEVANCE
 // ============================================
 export async function validateImageRelevance(topic, imageUrl) {
+    // Use Qwen by default (97% cheaper: ~$0.0001 vs $0.006 per image)
+    if (USE_QWEN_FOR_IMAGES) {
+        return await validateImageWithQwen(topic, imageUrl);
+    }
+    return await validateImageWithClaude(topic, imageUrl);
+}
+/**
+ * Validate image using Qwen2-VL on Modal (97% cheaper)
+ */
+async function validateImageWithQwen(topic, imageUrl) {
+    try {
+        const result = await analyzeImageWithQwen(imageUrl, topic);
+        return {
+            relevant: result.relevant && result.confidence >= 0.5,
+            score: result.confidence,
+            description: result.description,
+        };
+    }
+    catch (error) {
+        console.error(`      Qwen image validation failed: ${error.message}`);
+        // Fall back to Claude
+        return await validateImageWithClaude(topic, imageUrl);
+    }
+}
+/**
+ * Validate multiple images in batch using Qwen (more efficient)
+ */
+export async function validateImageBatch(topic, imageUrls) {
+    if (USE_QWEN_FOR_IMAGES) {
+        try {
+            const results = await analyzeImageBatchWithQwen(imageUrls, topic);
+            return results.map(r => ({
+                id: r.id,
+                relevant: r.relevant && r.confidence >= 0.5,
+                score: r.confidence,
+                description: r.description,
+            }));
+        }
+        catch (error) {
+            console.error(`      Qwen batch validation failed: ${error.message}`);
+        }
+    }
+    // Fall back to individual Claude calls
+    const results = [];
+    for (const img of imageUrls) {
+        const result = await validateImageWithClaude(topic, img.url);
+        results.push({ id: img.id, ...result });
+    }
+    return results;
+}
+/**
+ * Validate image using Claude (fallback, more expensive)
+ */
+async function validateImageWithClaude(topic, imageUrl) {
     try {
         // Download image and convert to base64
         const imageResponse = await axios.get(imageUrl, {
@@ -215,7 +272,7 @@ Respond in JSON:
         return { relevant: false, score: 0, description: '' };
     }
     catch (error) {
-        console.error(`      Image validation failed: ${error.message}`);
+        console.error(`      Claude image validation failed: ${error.message}`);
         return { relevant: false, score: 0, description: '' };
     }
 }
