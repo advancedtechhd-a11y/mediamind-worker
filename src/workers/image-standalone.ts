@@ -9,7 +9,7 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { searchWeb, searchImages, searchSite } from '../utils/searxng.js';
+import { searchWeb, searchImages, searchSite, searchSiteImages } from '../utils/searxng.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -101,33 +101,36 @@ async function searchSearXNGImages(topic: string, queries: string[]) {
   return results;
 }
 
-// 3. Public Domain Sources
+// 3. Public Domain Sources - use IMAGE search for actual image URLs
 async function searchPublicDomain(topic: string, queries: string[]) {
   console.log('[Image] Searching public domain sources...');
   const results: any[] = [];
 
   const publicDomainSites = [
-    { name: 'Library of Congress', site: 'loc.gov/pictures' },
-    { name: 'National Archives', site: 'catalog.archives.gov' },
+    { name: 'Library of Congress', site: 'loc.gov' },
+    { name: 'National Archives', site: 'archives.gov' },
     { name: 'Rawpixel', site: 'rawpixel.com' },
     { name: 'NYPL Digital', site: 'digitalcollections.nypl.org' },
     { name: 'Wellcome Collection', site: 'wellcomecollection.org' },
-    { name: 'Biodiversity Library', site: 'biodiversitylibrary.org' },
   ];
 
   for (const site of publicDomainSites) {
     for (const query of queries.slice(0, 2)) {
       try {
-        const searchResults = await searchSite(site.site, query, 20);
+        // Use image search to get actual image URLs
+        const searchResults = await searchSiteImages(site.site, query, 25);
 
         for (const item of searchResults) {
-          results.push({
-            url: item.url,
-            title: item.title,
-            source: site.name,
-            priority: 1,
-            license: 'public_domain',
-          });
+          if (item.img_src) {
+            results.push({
+              url: item.img_src,
+              title: item.title,
+              source: site.name,
+              thumbnail: item.thumbnail || item.img_src,
+              priority: 1,
+              license: 'public_domain',
+            });
+          }
         }
       } catch (e: any) {
         console.error(`[Image] Public domain (${site.name}) error: ${e.message}`);
@@ -139,23 +142,27 @@ async function searchPublicDomain(topic: string, queries: string[]) {
   return results;
 }
 
-// 4. Wikimedia Commons
+// 4. Wikimedia Commons - use IMAGE search
 async function searchWikimedia(topic: string, queries: string[]) {
   console.log('[Image] Searching Wikimedia Commons...');
   const results: any[] = [];
 
   for (const query of queries) {
     try {
-      const searchResults = await searchSite('commons.wikimedia.org', query, 40);
+      // Use image search for Wikimedia to get actual image URLs
+      const searchResults = await searchSiteImages('commons.wikimedia.org', query, 50);
 
       for (const item of searchResults) {
-        results.push({
-          url: item.url,
-          title: item.title,
-          source: 'wikimedia',
-          priority: 1,
-          license: 'creative_commons',
-        });
+        if (item.img_src) {
+          results.push({
+            url: item.img_src,
+            title: item.title,
+            source: 'wikimedia',
+            thumbnail: item.thumbnail || item.img_src,
+            priority: 1,
+            license: 'creative_commons',
+          });
+        }
       }
     } catch (e: any) {
       console.error(`[Image] Wikimedia error: ${e.message}`);
@@ -166,7 +173,7 @@ async function searchWikimedia(topic: string, queries: string[]) {
   return results;
 }
 
-// 5. Museum Collections
+// 5. Museum Collections - use IMAGE search for actual image URLs
 async function searchMuseums(topic: string, queries: string[]) {
   console.log('[Image] Searching museum collections...');
   const results: any[] = [];
@@ -187,16 +194,20 @@ async function searchMuseums(topic: string, queries: string[]) {
   for (const museum of museums) {
     for (const query of queries.slice(0, 2)) {
       try {
-        const searchResults = await searchSite(museum.site, query, 15);
+        // Use image search to get actual image URLs
+        const searchResults = await searchSiteImages(museum.site, query, 20);
 
         for (const item of searchResults) {
-          results.push({
-            url: item.url,
-            title: item.title,
-            source: museum.name,
-            priority: 3,
-            license: 'open_access',
-          });
+          if (item.img_src) {
+            results.push({
+              url: item.img_src,
+              title: item.title,
+              source: museum.name,
+              thumbnail: item.thumbnail || item.img_src,
+              priority: 3,
+              license: 'open_access',
+            });
+          }
         }
       } catch (e: any) {
         console.error(`[Image] Museum (${museum.name}) error: ${e.message}`);
@@ -208,7 +219,7 @@ async function searchMuseums(topic: string, queries: string[]) {
   return results;
 }
 
-// 6. Historical Photo Archives
+// 6. Historical Photo Archives - use IMAGE search
 async function searchHistoricalArchives(topic: string, queries: string[]) {
   console.log('[Image] Searching historical photo archives...');
   const results: any[] = [];
@@ -223,16 +234,20 @@ async function searchHistoricalArchives(topic: string, queries: string[]) {
   for (const site of historicalSites) {
     for (const query of queries.slice(0, 2)) {
       try {
-        const searchResults = await searchSite(site.site, query, 20);
+        // Use image search to get actual image URLs
+        const searchResults = await searchSiteImages(site.site, query, 25);
 
         for (const item of searchResults) {
-          results.push({
-            url: item.url,
-            title: item.title,
-            source: site.name,
-            priority: 4,
-            license: 'mixed',
-          });
+          if (item.img_src) {
+            results.push({
+              url: item.img_src,
+              title: item.title,
+              source: site.name,
+              thumbnail: item.thumbnail || item.img_src,
+              priority: 4,
+              license: 'mixed',
+            });
+          }
         }
       } catch (e: any) {
         console.error(`[Image] Historical (${site.name}) error: ${e.message}`);
@@ -244,23 +259,27 @@ async function searchHistoricalArchives(topic: string, queries: string[]) {
   return results;
 }
 
-// 7. Flickr Commons
+// 7. Flickr Commons - use IMAGE search
 async function searchFlickr(topic: string, queries: string[]) {
   console.log('[Image] Searching Flickr...');
   const results: any[] = [];
 
   for (const query of queries.slice(0, 3)) {
     try {
-      const searchResults = await searchSite('flickr.com', `${query} commons`, 25);
+      // Use image search to get actual image URLs from Flickr
+      const searchResults = await searchSiteImages('flickr.com', `${query} commons`, 30);
 
       for (const item of searchResults) {
-        results.push({
-          url: item.url,
-          title: item.title,
-          source: 'flickr',
-          priority: 2,
-          license: 'creative_commons',
-        });
+        if (item.img_src) {
+          results.push({
+            url: item.img_src,
+            title: item.title,
+            source: 'flickr',
+            thumbnail: item.thumbnail || item.img_src,
+            priority: 2,
+            license: 'creative_commons',
+          });
+        }
       }
     } catch (e: any) {
       console.error(`[Image] Flickr error: ${e.message}`);

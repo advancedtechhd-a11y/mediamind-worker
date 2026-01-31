@@ -102,10 +102,11 @@ export async function searchVideos(query: string, num: number = 30): Promise<Sea
   }
 }
 
-// News search
-export async function searchNews(query: string, num: number = 30): Promise<SearchResult[]> {
+// News search - searches multiple engines for news
+export async function searchNews(query: string, num: number = 50): Promise<SearchResult[]> {
   try {
-    const response = await axios.get(`${SEARXNG_URL}/search`, {
+    // Search news category
+    const newsResponse = await axios.get(`${SEARXNG_URL}/search`, {
       params: {
         q: query,
         format: 'json',
@@ -114,11 +115,29 @@ export async function searchNews(query: string, num: number = 30): Promise<Searc
       timeout: 20000,
     });
 
-    return (response.data?.results || []).slice(0, num).map((r: any) => ({
+    // Also search general web for news articles
+    const webNewsResponse = await axios.get(`${SEARXNG_URL}/search`, {
+      params: {
+        q: `${query} news article report`,
+        format: 'json',
+        categories: 'general',
+      },
+      timeout: 20000,
+    });
+
+    const newsResults = newsResponse.data?.results || [];
+    const webNewsResults = webNewsResponse.data?.results || [];
+
+    const combined = [...newsResults, ...webNewsResults];
+    const unique = combined.filter((item, index, self) =>
+      index === self.findIndex(t => t.url === item.url)
+    );
+
+    return unique.slice(0, num).map((r: any) => ({
       url: r.url,
       title: r.title,
       content: r.content,
-      engine: r.engine,
+      engine: r.engine || (r.engines || []).join(', '),
       publishedDate: r.publishedDate,
     }));
   } catch (error: any) {
@@ -131,6 +150,12 @@ export async function searchNews(query: string, num: number = 30): Promise<Searc
 export async function searchSite(site: string, query: string, num: number = 20): Promise<SearchResult[]> {
   const fullQuery = `site:${site} ${query}`;
   return searchWeb(fullQuery, num);
+}
+
+// Site-specific IMAGE search (returns actual image URLs)
+export async function searchSiteImages(site: string, query: string, num: number = 30): Promise<ImageResult[]> {
+  const fullQuery = `site:${site} ${query}`;
+  return searchImages(fullQuery, num);
 }
 
 // Health check
