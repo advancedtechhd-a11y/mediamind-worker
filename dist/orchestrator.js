@@ -9,8 +9,28 @@ import Anthropic from '@anthropic-ai/sdk';
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
-const anthropic = new Anthropic();
+// Initialize clients with error handling
+let supabase = null;
+let anthropic = null;
+try {
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+        supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+        console.log('[Orchestrator] Supabase client initialized');
+    }
+    else {
+        console.warn('[Orchestrator] WARNING: Supabase credentials missing');
+    }
+}
+catch (e) {
+    console.error('[Orchestrator] Supabase init error:', e.message);
+}
+try {
+    anthropic = new Anthropic();
+    console.log('[Orchestrator] Anthropic client initialized');
+}
+catch (e) {
+    console.error('[Orchestrator] Anthropic init error:', e.message);
+}
 // Worker URLs (internal network on same server)
 const WORKERS = {
     video: process.env.VIDEO_WORKER_URL || 'http://localhost:3001',
@@ -229,12 +249,12 @@ app.get('/v1/project/:id', async (req, res) => {
         success: true,
         project,
         results: {
-            images: media?.filter(m => m.type === 'image') || [],
-            videos: (media?.filter(m => m.type === 'video') || []).map(v => ({
+            images: media?.filter((m) => m.type === 'image') || [],
+            videos: (media?.filter((m) => m.type === 'video') || []).map((v) => ({
                 ...v,
-                clips: clips?.filter(c => c.media_id === v.id) || [],
+                clips: clips?.filter((c) => c.media_id === v.id) || [],
             })),
-            webContent: media?.filter(m => ['newspaper_scan', 'article_screenshot'].includes(m.type)) || [],
+            webContent: media?.filter((m) => ['newspaper_scan', 'article_screenshot'].includes(m.type)) || [],
         },
     });
 });

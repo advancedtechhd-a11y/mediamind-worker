@@ -14,7 +14,16 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.VIDEO_WORKER_PORT || 3001;
 app.use(express.json());
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+// Initialize Supabase with error handling
+let supabase = null;
+try {
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+        supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+    }
+}
+catch (e) {
+    console.warn('[Video] Supabase initialization failed');
+}
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // Blacklist of unrelated terms that indicate completely off-topic results
 const BLACKLIST_TERMS = [

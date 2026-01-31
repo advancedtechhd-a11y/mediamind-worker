@@ -19,7 +19,15 @@ const PORT = process.env.IMAGE_WORKER_PORT || 3002;
 
 app.use(express.json());
 
-const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
+// Initialize Supabase with error handling
+let supabase: any = null;
+try {
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+  }
+} catch (e) {
+  console.warn('[Image] Supabase initialization failed');
+}
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 

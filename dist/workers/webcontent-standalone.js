@@ -14,7 +14,16 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.WEBCONTENT_WORKER_PORT || 3003;
 app.use(express.json());
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+// Initialize Supabase with error handling
+let supabase = null;
+try {
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+        supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+    }
+}
+catch (e) {
+    console.warn('[WebContent] Supabase initialization failed');
+}
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 let browser = null;
 let browserError = null;

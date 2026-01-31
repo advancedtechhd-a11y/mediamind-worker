@@ -6,7 +6,7 @@
   "scripts": {
     "postinstall": "npx playwright install --with-deps chromium",
     "dev": "tsx watch src/orchestrator.ts",
-    "build": "tsc && cp -r src/config dist/",
+    "build": "tsc",
     "start": "sh start-workers.sh",
     "start:orchestrator": "node dist/orchestrator.js",
     "start:video": "node dist/workers/video-standalone.js",

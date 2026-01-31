@@ -19,7 +19,15 @@ const PORT = process.env.WEBCONTENT_WORKER_PORT || 3003;
 
 app.use(express.json());
 
-const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
+// Initialize Supabase with error handling
+let supabase: any = null;
+try {
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+  }
+} catch (e) {
+  console.warn('[WebContent] Supabase initialization failed');
+}
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
