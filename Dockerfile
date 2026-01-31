@@ -1,6 +1,6 @@
 FROM node:20
 
-# Install ffmpeg
+# Install ffmpeg and basic deps
 RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -11,8 +11,11 @@ COPY package*.json ./
 # Install dependencies
 RUN npm install
 
-# Install Playwright browsers with system dependencies
-RUN npx playwright install --with-deps chromium
+# Install Playwright system dependencies first
+RUN npx playwright install-deps chromium
+
+# Then install the browser
+RUN npx playwright install chromium
 
 # Copy source
 COPY . .
