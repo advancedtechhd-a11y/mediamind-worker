@@ -32,12 +32,21 @@ const BLACKLIST_TERMS = [
   'react to', 'reaction video'
 ];
 
-// Check if a result is relevant to the topic
+// AI-generated keywords for relevance (set per request)
+let relevanceKeywords: string[] = [];
+
+// Set keywords from orchestrator (AI-generated)
+function setRelevanceKeywords(keywords: string[]) {
+  relevanceKeywords = keywords.map(k => k.toLowerCase());
+  console.log(`[Video] Using AI-generated keywords: ${relevanceKeywords.join(', ')}`);
+}
+
+// Check if a result is relevant using AI-generated keywords
 function isRelevant(title: string, topic: string): boolean {
-  if (!title || !topic) return false;
+  if (!title) return false;
 
   const titleLower = title.toLowerCase();
-  const topicLower = topic.toLowerCase();
+  const topicLower = (topic || '').toLowerCase();
 
   // Check for blacklisted terms (completely unrelated content)
   for (const blacklisted of BLACKLIST_TERMS) {
@@ -46,41 +55,38 @@ function isRelevant(title: string, topic: string): boolean {
     }
   }
 
-  // Extract keywords from topic (words > 2 chars, excluding common/filler words)
+  // Use AI-generated keywords if available
+  if (relevanceKeywords.length > 0) {
+    // Check if ANY of the AI-generated keywords appear in the title
+    const matchCount = relevanceKeywords.filter(keyword => {
+      // Direct match
+      if (titleLower.includes(keyword)) return true;
+      // For multi-word keywords, check if all words appear
+      if (keyword.includes(' ')) {
+        const parts = keyword.split(' ');
+        return parts.every(part => titleLower.includes(part));
+      }
+      // For longer keywords, check partial match (root word)
+      if (keyword.length >= 6 && titleLower.includes(keyword.slice(0, 5))) return true;
+      return false;
+    }).length;
+
+    // Need at least 1 keyword match from AI-generated list
+    return matchCount >= 1;
+  }
+
+  // Fallback: extract keywords from topic if no AI keywords provided
   const stopWords = [
     'the', 'and', 'for', 'was', 'were', 'are', 'how', 'what', 'who', 'when', 'where', 'why',
     'did', 'does', 'has', 'have', 'had', 'been', 'being', 'with', 'from', 'about', 'into',
-    'that', 'this', 'these', 'those', 'happen', 'happened', 'happens', 'happening',
-    'start', 'started', 'starts', 'begin', 'began', 'become', 'became', 'make', 'made',
-    'explained', 'explain', 'story', 'history', 'documentary', 'video', 'full', 'complete'
+    'that', 'this', 'these', 'those', 'happen', 'happened', 'explained', 'story'
   ];
   const keywords = topicLower.split(/\s+/).filter(word => word.length > 2 && !stopWords.includes(word));
 
-  if (keywords.length === 0) return true; // If no keywords extracted, allow it
+  if (keywords.length === 0) return true;
 
-  // Check how many keywords appear in the title (also check for partial matches for longer words)
-  const matchCount = keywords.filter(keyword => {
-    // Direct match
-    if (titleLower.includes(keyword)) return true;
-    // For words 6+ chars, check if title contains the root (first 5 chars)
-    if (keyword.length >= 6 && titleLower.includes(keyword.slice(0, 5))) return true;
-    return false;
-  }).length;
-
-  // Require at least 35% of keywords to match (balanced filtering)
-  const minMatches = Math.max(1, Math.ceil(keywords.length * 0.35));
-
-  // For single important keyword topics, just need that one word
-  if (keywords.length === 1) {
-    return matchCount >= 1;
-  }
-
-  // For 2-word topics, need at least 1 match
-  if (keywords.length === 2) {
-    return matchCount >= 1;
-  }
-
-  return matchCount >= minMatches;
+  const matchCount = keywords.filter(keyword => titleLower.includes(keyword)).length;
+  return matchCount >= 1;
 }
 
 // Load sources config
@@ -179,17 +185,15 @@ async function searchArchiveOrg(topic: string, queries: string[]) {
 
           if (videoFile) {
             const title = doc.title || doc.identifier;
-            // RELEVANCE CHECK for Archive.org
-            if (isRelevant(title, topic)) {
-              results.push({
-                url: `https://archive.org/download/${doc.identifier}/${videoFile.name}`,
-                title: title,
-                source: 'archive.org',
-                thumbnail: `https://archive.org/services/img/${doc.identifier}`,
-                priority: 1,
-                license: 'public_domain',
-              });
-            }
+            // TIER 1 SOURCE: Trust Archive.org completely (no relevance filtering)
+            results.push({
+              url: `https://archive.org/download/${doc.identifier}/${videoFile.name}`,
+              title: title,
+              source: 'archive.org',
+              thumbnail: `https://archive.org/services/img/${doc.identifier}`,
+              priority: 1,
+              license: 'public_domain',
+            });
           }
         } catch (e: any) { /* skip */ }
       }
@@ -302,8 +306,9 @@ async function searchHistoricalArchives(topic: string, queries: string[]) {
         const searchResults = await searchSite(archive.site, `${query} video film footage`, 15);
 
         for (const item of searchResults) {
-          // RELEVANCE CHECK for historical archives
-          if (isVideoUrl(item.url) && isRelevant(item.title, topic)) {
+          // TIER 1 SOURCE: Trust historical archives (British Pathe, LOC, etc.)
+          // Only check if it's a video URL, no relevance filtering
+          if (isVideoUrl(item.url)) {
             results.push({
               url: item.url,
               title: item.title,
@@ -343,15 +348,20 @@ async function searchNewsDocumentary(topic: string, queries: string[]) {
         const searchResults = await searchSite(source.site, query, 15);
 
         for (const item of searchResults) {
-          // RELEVANCE CHECK for news/documentary
-          if (isVideoUrl(item.url) && isRelevant(item.title, topic)) {
-            results.push({
-              url: item.url,
-              title: item.title,
-              source: source.name,
-              priority: 4,
-              license: 'editorial',
-            });
+          // TIER 2 SOURCE: Trust news/documentary sites (light filtering - blacklist only)
+          if (isVideoUrl(item.url)) {
+            const titleLower = (item.title || '').toLowerCase();
+            // Only block if obviously unrelated (blacklist check)
+            const isBlacklisted = BLACKLIST_TERMS.some(term => titleLower.includes(term));
+            if (!isBlacklisted) {
+              results.push({
+                url: item.url,
+                title: item.title,
+                source: source.name,
+                priority: 4,
+                license: 'editorial',
+              });
+            }
           }
         }
       } catch (e: any) {
@@ -444,15 +454,24 @@ async function searchWebVideos(topic: string, queries: string[]) {
 // ============================================
 
 app.post('/search', async (req, res) => {
-  const { projectId, topic, queries } = req.body;
+  const { projectId, topic, queries, keywords } = req.body;
 
   if (!topic) {
     return res.status(400).json({ error: 'Topic required' });
   }
 
+  // Set AI-generated keywords for relevance filtering
+  if (keywords && Array.isArray(keywords) && keywords.length > 0) {
+    setRelevanceKeywords(keywords);
+  } else {
+    // Reset to empty so fallback logic is used
+    setRelevanceKeywords([]);
+  }
+
   const searchQueries = queries || [topic];
   console.log(`\n[Video Worker] Starting search for "${topic}"`);
   console.log(`[Video Worker] Queries: ${searchQueries.join(', ')}`);
+  console.log(`[Video Worker] AI Keywords: ${keywords?.join(', ') || 'none (using fallback)'}`);
   console.log(`[Video Worker] Using SearXNG (unlimited searches)`);
 
   try {

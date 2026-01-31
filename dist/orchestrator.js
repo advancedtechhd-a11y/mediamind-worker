@@ -22,38 +22,56 @@ const WORKERS = {
 // CLAUDE QUERY GENERATOR
 // ============================================
 async function generateSearchQueries(topic) {
-    console.log(`[Orchestrator] Generating search queries for "${topic}"...`);
+    console.log(`[Orchestrator] Generating expanded search queries for "${topic}"...`);
     try {
         const response = await anthropic.messages.create({
             model: 'claude-sonnet-4-20250514',
-            max_tokens: 1000,
+            max_tokens: 1500,
             messages: [{
                     role: 'user',
-                    content: `You are a research assistant. Generate specific search queries for finding media about: "${topic}"
+                    content: `You are a research query expansion expert. For the topic "${topic}", generate search queries that will find relevant media even when titles use DIFFERENT WORDS than the original topic.
 
-Return a JSON object with:
-1. "videoQueries": 5 specific queries for finding relevant videos (historical footage, documentaries, news clips)
-2. "imageQueries": 5 specific queries for finding relevant images (photos, portraits, historical images)
-3. "webQueries": 5 specific queries for finding relevant articles, news, reports
-4. "topicType": One of: "history", "crime", "celebrity", "finance", "real_estate", "horror", "science", "general"
+CRITICAL: Think about SYNONYMS, ALTERNATE NAMES, RELATED EVENTS, KEY PEOPLE, and how media titles actually phrase things.
 
-Make queries SPECIFIC. For example:
-- Bad: "Al Capone video"
-- Good: "Al Capone 1931 courtroom footage", "Chicago speakeasy prohibition era"
+Example expansion for "2008 recession":
+- "2008 financial crisis" (synonym)
+- "subprime mortgage collapse" (related cause)
+- "Lehman Brothers bankruptcy" (key event)
+- "housing market crash 2008" (related term)
+- "Great Recession documentary" (alternate name)
+- "Wall Street bailout 2008" (related event)
+- "Bear Stearns collapse" (key event)
 
-Return ONLY valid JSON, no other text.`
+Return a JSON object:
+{
+  "videoQueries": [8-10 queries for videos/documentaries/footage - use synonyms and related terms],
+  "imageQueries": [8-10 queries for photos/images - include key people, places, events],
+  "webQueries": [8-10 queries for articles/news - cover different angles and related topics],
+  "topicType": "history" | "crime" | "celebrity" | "finance" | "politics" | "science" | "military" | "disaster" | "general",
+  "keywords": [10-15 individual keywords/phrases that should appear in relevant results - these are used for relevance filtering]
+}
+
+The "keywords" array is CRITICAL - include:
+- Main topic words and their synonyms
+- Names of key people involved
+- Names of key places/organizations
+- Related events/terms
+- Common words used in titles about this topic
+
+Return ONLY valid JSON.`
                 }]
         });
         const text = response.content[0].type === 'text' ? response.content[0].text : '';
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
-            console.log(`[Orchestrator] Generated queries:`, parsed);
+            console.log(`[Orchestrator] Generated expanded queries:`, JSON.stringify(parsed, null, 2));
             return {
                 videoQueries: parsed.videoQueries || [topic],
                 imageQueries: parsed.imageQueries || [topic],
                 webQueries: parsed.webQueries || [topic],
                 topicType: parsed.topicType || 'general',
+                keywords: parsed.keywords || topic.toLowerCase().split(/\s+/).filter((w) => w.length > 3),
             };
         }
     }
@@ -62,10 +80,11 @@ Return ONLY valid JSON, no other text.`
     }
     // Fallback to basic queries
     return {
-        videoQueries: [topic, `${topic} documentary`, `${topic} footage`],
-        imageQueries: [topic, `${topic} photo`, `${topic} historical`],
-        webQueries: [topic, `${topic} article`, `${topic} history`],
+        videoQueries: [topic, `${topic} documentary`, `${topic} footage`, `${topic} explained`],
+        imageQueries: [topic, `${topic} photo`, `${topic} historical`, `${topic} images`],
+        webQueries: [topic, `${topic} article`, `${topic} history`, `${topic} explained`],
         topicType: 'general',
+        keywords: topic.toLowerCase().split(/\s+/).filter(w => w.length > 3),
     };
 }
 // ============================================
@@ -116,6 +135,7 @@ app.post('/v1/research', async (req, res) => {
                         projectId,
                         topic,
                         queries: queries.videoQueries,
+                        keywords: queries.keywords, // AI-generated relevance keywords
                     }, { timeout: 300000 }).catch(e => {
                         console.log(`[Orchestrator] Video worker error: ${e.message}`);
                         return { data: { count: 0 } };
@@ -125,6 +145,7 @@ app.post('/v1/research', async (req, res) => {
                         projectId,
                         topic,
                         queries: queries.imageQueries,
+                        keywords: queries.keywords,
                     }, { timeout: 300000 }).catch(e => {
                         console.log(`[Orchestrator] Image worker error: ${e.message}`);
                         return { data: { count: 0 } };
@@ -135,6 +156,7 @@ app.post('/v1/research', async (req, res) => {
                         topic,
                         queries: queries.webQueries,
                         topicType: queries.topicType,
+                        keywords: queries.keywords,
                         takeScreenshots: true,
                     }, { timeout: 600000 }).catch(e => {
                         console.log(`[Orchestrator] WebContent worker error: ${e.message}`);
