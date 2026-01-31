@@ -18,8 +18,8 @@ const SERPER_API_KEY = process.env.SERPER_API_KEY;
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Video file extensions to look for
-const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.ogv', '.avi', '.mov', '.mkv', '.m4v'];
-const NON_VIDEO_EXTENSIONS = ['.pdf', '.txt', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif', '.html', '.htm'];
+const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.ogv', '.ogg', '.avi', '.mov', '.mkv', '.m4v', '.flv', '.wmv', '.3gp', '.mpeg', '.mpg'];
+const NON_VIDEO_EXTENSIONS = ['.pdf', '.txt', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif', '.html', '.htm', '.wav', '.mp3', '.aac', '.flac'];
 
 // Check if URL is likely a video
 function isVideoUrl(url: string): boolean {
