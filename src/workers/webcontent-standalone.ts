@@ -1,15 +1,15 @@
 // WEB CONTENT WORKER - Standalone Service (Port 3003)
-// Searches: 30+ web sources → Takes screenshots using Playwright
+// Searches: 30+ web sources using SearXNG → Takes screenshots
 
 import 'dotenv/config';
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
-import axios from 'axios';
 import { chromium, Browser } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { searchWeb, searchNews, searchSite } from '../utils/searxng.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,19 +20,8 @@ const PORT = process.env.WEBCONTENT_WORKER_PORT || 3003;
 app.use(express.json());
 
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
-const SERPER_API_KEY = process.env.SERPER_API_KEY;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Load sources config
-let sourcesConfig: any = null;
-try {
-  const configPath = path.join(__dirname, '../config/sources.json');
-  sourcesConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-  console.log('[WebContent] Loaded sources config');
-} catch (e) {
-  console.log('[WebContent] Config not found, using defaults');
-}
 
 let browser: Browser | null = null;
 let browserError: string | null = null;
@@ -44,19 +33,13 @@ async function initBrowser() {
     try {
       browser = await chromium.launch({
         headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu'
-        ]
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
       });
       browserError = null;
       console.log('[WebContent] Browser ready');
     } catch (error: any) {
       browserError = error.message;
       console.error('[WebContent] Failed to launch browser:', error.message);
-      console.error('[WebContent] Full error:', error);
       throw error;
     }
   }
@@ -68,65 +51,12 @@ async function initBrowser() {
 // ============================================
 
 async function dismissCookiePopups(page: any): Promise<void> {
-  // Common cookie consent button selectors
   const dismissSelectors = [
-    // Cookie consent - Accept buttons
-    'button[id*="accept"]',
-    'button[id*="cookie"]',
-    'button[class*="accept"]',
-    'button[class*="consent"]',
-    'button[class*="agree"]',
-    '[class*="cookie"] button',
-    '[class*="consent"] button',
-    '[class*="gdpr"] button',
-    '[id*="cookie"] button',
-    '[id*="consent"] button',
-    // Common text matches
-    'button:has-text("Accept")',
-    'button:has-text("Accept All")',
-    'button:has-text("Accept Cookies")',
-    'button:has-text("I Accept")',
-    'button:has-text("I Agree")',
-    'button:has-text("Agree")',
-    'button:has-text("OK")',
-    'button:has-text("Got it")',
-    'button:has-text("Allow")',
-    'button:has-text("Allow All")',
-    'button:has-text("Continue")',
-    'button:has-text("Reject Non-Essential")',
-    // Links that dismiss
-    'a:has-text("Accept")',
-    'a:has-text("I Accept")',
-    // Close buttons on modals
-    '[class*="modal"] [class*="close"]',
-    '[class*="popup"] [class*="close"]',
-    '[class*="banner"] [class*="close"]',
-    '[class*="notice"] [class*="close"]',
-    '[aria-label="Close"]',
-    '[aria-label="Dismiss"]',
-    'button[class*="close"]',
-    // Specific common frameworks
-    '#onetrust-accept-btn-handler',
-    '.onetrust-close-btn-handler',
-    '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
-    '#CybotCookiebotDialogBodyButtonAccept',
-    '.cc-accept',
-    '.cc-dismiss',
-    '#cookieConsent button',
-    '.cookie-notice button',
-    '.privacy-notice button',
-    // Additional common patterns
-    '[data-testid="cookie-accept"]',
-    '[data-cy="cookie-accept"]',
-    '.accept-cookies',
-    '.cookie-accept',
-    '#accept-cookies',
-    '.js-accept-cookies',
-    '.cookie-bar__button',
-    '.cookie-banner__button',
-    '#cookie-accept-btn',
-    '.gdpr-accept',
-    '#gdpr-accept',
+    'button[id*="accept"]', 'button[class*="accept"]', 'button[class*="consent"]',
+    'button:has-text("Accept")', 'button:has-text("Accept All")', 'button:has-text("I Agree")',
+    'button:has-text("OK")', 'button:has-text("Got it")', 'button:has-text("Allow")',
+    '#onetrust-accept-btn-handler', '.cc-accept', '.cc-dismiss',
+    '[aria-label="Close"]', '[aria-label="Dismiss"]', 'button[class*="close"]',
   ];
 
   for (const selector of dismissSelectors) {
@@ -136,9 +66,7 @@ async function dismissCookiePopups(page: any): Promise<void> {
         await element.click();
         await page.waitForTimeout(300);
       }
-    } catch (e) {
-      // Ignore - button might not exist or be clickable
-    }
+    } catch (e) { /* ignore */ }
   }
 }
 
@@ -154,18 +82,10 @@ async function takeScreenshot(url: string, outputPath: string): Promise<boolean>
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
     await page.waitForTimeout(1500);
-
-    // Dismiss cookie popups and banners
     await dismissCookiePopups(page);
     await page.waitForTimeout(500);
 
-    await page.screenshot({
-      path: outputPath,
-      fullPage: false,
-      type: 'jpeg',
-      quality: 85
-    });
-
+    await page.screenshot({ path: outputPath, fullPage: false, type: 'jpeg', quality: 85 });
     await page.close();
     return true;
   } catch (e: any) {
@@ -174,19 +94,12 @@ async function takeScreenshot(url: string, outputPath: string): Promise<boolean>
   }
 }
 
-// Upload screenshot to Supabase
 async function uploadScreenshot(filePath: string, storagePath: string): Promise<string | null> {
   try {
     const fileBuffer = fs.readFileSync(filePath);
-
-    const { error } = await supabase.storage
-      .from('mediamind')
-      .upload(storagePath, fileBuffer, { contentType: 'image/jpeg', upsert: true });
-
+    const { error } = await supabase.storage.from('mediamind').upload(storagePath, fileBuffer, { contentType: 'image/jpeg', upsert: true });
     if (error) return null;
-
     const { data: { publicUrl } } = supabase.storage.from('mediamind').getPublicUrl(storagePath);
-
     fs.unlinkSync(filePath);
     return publicUrl;
   } catch (e) {
@@ -195,71 +108,61 @@ async function uploadScreenshot(filePath: string, storagePath: string): Promise<
 }
 
 // ============================================
-// SEARCH SOURCES
+// SEARCH SOURCES (Using SearXNG)
 // ============================================
 
 // 1. News Search
-async function searchNews(topic: string, queries: string[]) {
+async function searchNewsArticles(topic: string, queries: string[]) {
   console.log('[WebContent] Searching news...');
   const results: any[] = [];
 
   for (const query of queries) {
     try {
-      await delay(300);
-      const response = await axios.post('https://google.serper.dev/news',
-        { q: query, num: 30 },
-        { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 15000 }
-      );
+      const searchResults = await searchNews(query, 40);
 
-      for (const item of response.data?.news || []) {
+      for (const item of searchResults) {
         results.push({
-          url: item.link,
+          url: item.url,
           title: item.title,
-          source: item.source || new URL(item.link).hostname,
-          snippet: item.snippet,
-          date: item.date,
+          source: item.engine || 'news',
+          snippet: item.content,
+          date: item.publishedDate,
           type: 'news',
         });
       }
-    } catch (e: any) { console.error(`[WebContent] News error: ${e.message}`); }
+    } catch (e: any) {
+      console.error(`[WebContent] News error: ${e.message}`);
+    }
   }
 
   console.log(`[WebContent] News found: ${results.length}`);
   return results;
 }
 
-// 2. Historical Newspapers (Expanded)
+// 2. Historical Newspapers
 async function searchHistoricalNewspapers(topic: string, queries: string[]) {
   console.log('[WebContent] Searching historical newspapers...');
   const results: any[] = [];
 
-  const sources = sourcesConfig?.webcontent?.historical_newspapers || [
+  const sources = [
     { site: 'chroniclingamerica.loc.gov', name: 'Library of Congress' },
     { site: 'newspapers.com', name: 'Newspapers.com' },
     { site: 'news.google.com/newspapers', name: 'Google News Archive' },
-    { site: 'newspaperarchive.com', name: 'Newspaper Archive' },
-    { site: 'britishnewspaperarchive.co.uk', name: 'British Newspaper Archive' },
     { site: 'trove.nla.gov.au/newspaper', name: 'Trove Australia' },
-    { site: 'fultonhistory.com', name: 'Fulton History NY' },
-    { site: 'cdnc.ucr.edu', name: 'California Digital Newspaper' },
+    { site: 'britishnewspaperarchive.co.uk', name: 'British Newspaper Archive' },
   ];
 
   for (const source of sources) {
     for (const query of queries.slice(0, 2)) {
       try {
-        await delay(300);
-        const searchQuery = `site:${source.site} ${query}`;
-        const response = await axios.post('https://google.serper.dev/search',
-          { q: searchQuery, num: 20 },
-          { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
-        );
+        const searchResults = await searchSite(source.site, query, 20);
 
-        for (const item of response.data?.organic || []) {
+        for (const item of searchResults) {
           results.push({
-            url: item.link,
+            url: item.url,
             title: item.title,
             source: source.name,
-            snippet: item.snippet,
+            snippet: item.content,
             type: 'newspaper',
           });
         }
@@ -273,45 +176,30 @@ async function searchHistoricalNewspapers(topic: string, queries: string[]) {
   return results;
 }
 
-// 3. Authoritative Sources (Expanded)
+// 3. Authoritative Sources
 async function searchAuthoritativeSources(topic: string, queries: string[]) {
   console.log('[WebContent] Searching authoritative sources...');
   const results: any[] = [];
 
-  const authSites = sourcesConfig?.webcontent?.authoritative?.map((s: any) => s.site) || [
-    'wikipedia.org',
-    'britannica.com',
-    'history.com',
-    'bbc.com',
-    'cnn.com',
-    'nytimes.com',
-    'theguardian.com',
-    'reuters.com',
-    'apnews.com',
-    'npr.org',
-    'washingtonpost.com',
-    'theatlantic.com',
+  const authSites = [
+    'wikipedia.org', 'britannica.com', 'history.com', 'bbc.com',
+    'cnn.com', 'nytimes.com', 'theguardian.com', 'reuters.com',
+    'apnews.com', 'npr.org', 'washingtonpost.com', 'theatlantic.com',
   ];
 
   for (const site of authSites) {
     for (const query of queries.slice(0, 2)) {
       try {
-        await delay(300);
-        const searchQuery = `site:${site} ${query}`;
-        const response = await axios.post('https://google.serper.dev/search',
-          { q: searchQuery, num: 10 },
-          { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
-        );
+        const searchResults = await searchSite(site, query, 10);
 
-        for (const item of response.data?.organic || []) {
-          // Filter junk URLs
-          if (item.link.includes('/search?') || item.link.includes('/this-day-in-history/')) continue;
+        for (const item of searchResults) {
+          if (item.url.includes('/search?')) continue;
 
           results.push({
-            url: item.link,
+            url: item.url,
             title: item.title,
             source: site.split('.')[0],
-            snippet: item.snippet,
+            snippet: item.content,
             type: 'authoritative',
           });
         }
@@ -332,20 +220,15 @@ async function searchBlogsAndArticles(topic: string, queries: string[]) {
 
   for (const query of queries) {
     try {
-      await delay(300);
-      const searchQuery = `${query} blog OR article OR report OR analysis`;
-      const response = await axios.post('https://google.serper.dev/search',
-        { q: searchQuery, num: 30 },
-        { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 15000 }
-      );
+      const searchResults = await searchWeb(`${query} blog article analysis report`, 40);
 
-      for (const item of response.data?.organic || []) {
-        const domain = new URL(item.link).hostname.replace('www.', '');
+      for (const item of searchResults) {
+        const domain = new URL(item.url).hostname.replace('www.', '');
         results.push({
-          url: item.link,
+          url: item.url,
           title: item.title,
           source: domain,
-          snippet: item.snippet,
+          snippet: item.content,
           type: 'article',
         });
       }
@@ -358,84 +241,54 @@ async function searchBlogsAndArticles(topic: string, queries: string[]) {
   return results;
 }
 
-// 5. Topic-specific sites (based on topic type)
+// 5. Topic-specific sites
 async function searchTopicSpecificSites(topic: string, queries: string[], topicType: string) {
   console.log(`[WebContent] Searching topic-specific sites for ${topicType}...`);
   const results: any[] = [];
 
-  // Get site mappings from config or use defaults
-  const configNiche = sourcesConfig?.webcontent?.niche_specific?.[topicType];
-
-  const defaultSiteMappings: Record<string, {site: string, name: string}[]> = {
-    'real_estate': [
-      { site: 'zillow.com', name: 'Zillow' },
-      { site: 'realtor.com', name: 'Realtor' },
-      { site: 'redfin.com', name: 'Redfin' },
-      { site: 'trulia.com', name: 'Trulia' },
-    ],
-    'finance': [
-      { site: 'bloomberg.com', name: 'Bloomberg' },
-      { site: 'marketwatch.com', name: 'MarketWatch' },
-      { site: 'investopedia.com', name: 'Investopedia' },
-      { site: 'wsj.com', name: 'WSJ' },
-    ],
+  const siteMappings: Record<string, { site: string; name: string }[]> = {
     'crime': [
       { site: 'fbi.gov', name: 'FBI' },
       { site: 'justice.gov', name: 'DOJ' },
       { site: 'courtlistener.com', name: 'CourtListener' },
-      { site: 'law.cornell.edu', name: 'Cornell Law' },
     ],
     'celebrity': [
       { site: 'imdb.com', name: 'IMDb' },
       { site: 'people.com', name: 'People' },
       { site: 'biography.com', name: 'Biography' },
-      { site: 'eonline.com', name: 'E! News' },
     ],
     'history': [
       { site: 'history.com', name: 'History' },
       { site: 'historynet.com', name: 'HistoryNet' },
       { site: 'worldhistory.org', name: 'World History' },
     ],
-    'horror': [
-      { site: 'bloody-disgusting.com', name: 'Bloody Disgusting' },
-      { site: 'dreadcentral.com', name: 'Dread Central' },
-      { site: 'imdb.com', name: 'IMDb' },
-    ],
     'sports': [
       { site: 'espn.com', name: 'ESPN' },
       { site: 'sports-reference.com', name: 'Sports Reference' },
-      { site: 'bleacherreport.com', name: 'Bleacher Report' },
     ],
     'military': [
       { site: 'defense.gov', name: 'DoD' },
       { site: 'militarytimes.com', name: 'Military Times' },
-      { site: 'warhistoryonline.com', name: 'War History' },
     ],
     'science': [
       { site: 'nasa.gov', name: 'NASA' },
       { site: 'nature.com', name: 'Nature' },
-      { site: 'scientificamerican.com', name: 'Scientific American' },
     ],
   };
 
-  const sites = configNiche || defaultSiteMappings[topicType] || [];
+  const sites = siteMappings[topicType] || [];
 
   for (const siteObj of sites) {
     for (const query of queries.slice(0, 2)) {
       try {
-        await delay(300);
-        const searchQuery = `site:${siteObj.site} ${query}`;
-        const response = await axios.post('https://google.serper.dev/search',
-          { q: searchQuery, num: 15 },
-          { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
-        );
+        const searchResults = await searchSite(siteObj.site, query, 15);
 
-        for (const item of response.data?.organic || []) {
+        for (const item of searchResults) {
           results.push({
-            url: item.link,
+            url: item.url,
             title: item.title,
             source: siteObj.name,
-            snippet: item.snippet,
+            snippet: item.content,
             type: 'topic_specific',
           });
         }
@@ -463,12 +316,12 @@ app.post('/search', async (req, res) => {
   const searchQueries = queries || [topic];
   console.log(`\n[WebContent Worker] Starting search for "${topic}"`);
   console.log(`[WebContent Worker] Queries: ${searchQueries.join(', ')}`);
-  console.log(`[WebContent Worker] Searching 30+ sources...`);
+  console.log(`[WebContent Worker] Using SearXNG (unlimited searches)`);
 
   try {
     // Search all sources in parallel
     const [news, newspapers, authoritative, blogs, topicSpecific] = await Promise.all([
-      searchNews(topic, searchQueries),
+      searchNewsArticles(topic, searchQueries),
       searchHistoricalNewspapers(topic, searchQueries),
       searchAuthoritativeSources(topic, searchQueries),
       searchBlogsAndArticles(topic, searchQueries),
@@ -482,7 +335,7 @@ app.post('/search', async (req, res) => {
     );
 
     console.log(`[WebContent Worker] Total unique pages: ${unique.length}`);
-    console.log(`[WebContent Worker] By type: News=${news.length}, Newspapers=${newspapers.length}, Authoritative=${authoritative.length}, Blogs=${blogs.length}, TopicSpecific=${topicSpecific.length}`);
+    console.log(`[WebContent Worker] Breakdown: News=${news.length}, Newspapers=${newspapers.length}, Authoritative=${authoritative.length}, Blogs=${blogs.length}, TopicSpecific=${topicSpecific.length}`);
 
     // Take screenshots and save to Supabase
     if (projectId && takeScreenshots) {
@@ -490,7 +343,7 @@ app.post('/search', async (req, res) => {
       fs.mkdirSync(tempDir, { recursive: true });
 
       let saved = 0;
-      const maxScreenshots = 100; // Limit screenshots
+      const maxScreenshots = 100;
 
       for (const page of unique.slice(0, maxScreenshots)) {
         try {
@@ -519,12 +372,10 @@ app.post('/search', async (req, res) => {
 
           saved++;
           console.log(`[WebContent] Saved ${saved}/${maxScreenshots}: ${page.source}`);
-        } catch (e: any) { console.error(`[WebContent] Error: ${e.message}`); }
+        } catch (e: any) { /* skip */ }
       }
 
       console.log(`[WebContent Worker] Saved ${saved} screenshots to database`);
-
-      // Cleanup
       try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
     }
 
@@ -553,25 +404,22 @@ app.get('/health', (req, res) => {
     port: PORT,
     browser_ready: !!browser,
     browser_error: browserError,
-    sources_loaded: !!sourcesConfig,
-    total_sources: sourcesConfig ? '30+' : 'defaults',
+    search_engine: 'SearXNG (self-hosted)',
   });
 });
 
-// Start server first, then try to initialize browser
 app.listen(PORT, () => {
   console.log(`\n========================================`);
   console.log(`  WEB CONTENT WORKER running on port ${PORT}`);
+  console.log(`  Search Engine: SearXNG (unlimited)`);
   console.log(`  Sources: 30+ across 5 categories`);
   console.log(`========================================\n`);
 
-  // Initialize browser after server starts
   initBrowser().catch(err => {
     console.error('[WebContent] Browser initialization failed, will retry on first request');
   });
 });
 
-// Cleanup on exit
 process.on('SIGINT', async () => {
   if (browser) await browser.close();
   process.exit();

@@ -1,5 +1,5 @@
 // VIDEO WORKER - Standalone Service (Port 3001)
-// Searches: 50+ video sources from config file
+// Searches: 50+ video sources using SearXNG (self-hosted, unlimited)
 
 import 'dotenv/config';
 import express from 'express';
@@ -9,6 +9,7 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { searchWeb, searchVideos, searchSite } from '../utils/searxng.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,7 +20,6 @@ const PORT = process.env.VIDEO_WORKER_PORT || 3001;
 app.use(express.json());
 
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
-const SERPER_API_KEY = process.env.SERPER_API_KEY;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -51,7 +51,7 @@ function isVideoUrl(url: string): boolean {
     return true;
   }
 
-  // Include known video platforms/patterns (be generous here)
+  // Include known video platforms/patterns
   const videoPatterns = [
     'britishpathe.com',
     'c-span.org/video',
@@ -89,7 +89,7 @@ function isVideoUrl(url: string): boolean {
 }
 
 // ============================================
-// SEARCH SOURCES (Priority Order)
+// SEARCH SOURCES (Using SearXNG)
 // ============================================
 
 // 1. Archive.org (BEST - Public domain, downloadable)
@@ -108,8 +108,8 @@ async function searchArchiveOrg(topic: string, queries: string[]) {
 
       const docs = response.data?.response?.docs || [];
 
-      for (const doc of docs.slice(0, 20)) {
-        await delay(200);
+      for (const doc of docs.slice(0, 25)) {
+        await delay(150);
         try {
           const meta = await axios.get(`https://archive.org/metadata/${doc.identifier}`, { timeout: 10000 });
           const files = meta.data?.files || [];
@@ -127,7 +127,7 @@ async function searchArchiveOrg(topic: string, queries: string[]) {
               license: 'public_domain',
             });
           }
-        } catch (e: any) { console.error(`[Video] Error: ${e.message}`); }
+        } catch (e: any) { /* skip */ }
       }
     } catch (e: any) {
       console.log(`[Video] Archive.org query failed: ${e.message}`);
@@ -138,81 +138,67 @@ async function searchArchiveOrg(topic: string, queries: string[]) {
   return results;
 }
 
-// 2. Wikimedia Commons
-async function searchWikimedia(topic: string, queries: string[]) {
-  console.log('[Video] Searching Wikimedia...');
+// 2. SearXNG Video Search (aggregates Google, Bing, DuckDuckGo videos)
+async function searchSearXNGVideos(topic: string, queries: string[]) {
+  console.log('[Video] Searching via SearXNG video category...');
   const results: any[] = [];
 
   for (const query of queries) {
     try {
-      await delay(300);
-      // Search specifically for video files on Wikimedia
-      const searchQuery = `site:commons.wikimedia.org/wiki/File: ${query} filetype:ogv OR filetype:webm OR filetype:mp4`;
-      console.log(`[Video] Wikimedia query: ${searchQuery}`);
-      const response = await axios.post('https://google.serper.dev/search',
-        { q: searchQuery, num: 20 },
-        { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
-      );
+      const searchResults = await searchVideos(`${query} historical footage documentary`, 50);
 
-      for (const item of response.data?.organic || []) {
-        // Only include actual video file pages
-        const url = item.link.toLowerCase();
-        if (url.includes('.ogv') || url.includes('.webm') || url.includes('.mp4') || url.includes('file:')) {
+      for (const item of searchResults) {
+        if (isVideoUrl(item.url)) {
           results.push({
-            url: item.link,
+            url: item.url,
             title: item.title,
-            source: 'wikimedia',
-            priority: 1,
-            license: 'creative_commons',
+            source: item.engine || 'searxng',
+            thumbnail: item.thumbnail,
+            priority: 2,
+            license: 'unknown',
           });
         }
       }
     } catch (e: any) {
-      console.error(`[Video] Wikimedia error: ${e.message}`);
-      if (e.response) console.error(`[Video] Response: ${JSON.stringify(e.response.data)}`);
+      console.error(`[Video] SearXNG video search error: ${e.message}`);
     }
   }
 
-  console.log(`[Video] Wikimedia found: ${results.length}`);
+  console.log(`[Video] SearXNG videos found: ${results.length}`);
   return results;
 }
 
-// 3. Free Stock Video Sites (Pexels, Pixabay, Videvo, etc.)
+// 3. Free Stock Video Sites
 async function searchFreeStockVideo(topic: string, queries: string[]) {
   console.log('[Video] Searching free stock video sites...');
   const results: any[] = [];
 
-  const freeStockSites = sourcesConfig?.video?.tier2_creative_commons || [
-    { name: 'Pexels Video', searchPattern: 'site:pexels.com/video' },
-    { name: 'Pixabay Video', searchPattern: 'site:pixabay.com/videos' },
-    { name: 'Videvo', searchPattern: 'site:videvo.net' },
-    { name: 'Coverr', searchPattern: 'site:coverr.co' },
-    { name: 'Mixkit', searchPattern: 'site:mixkit.co/free-stock-video' },
+  const freeStockSites = [
+    { name: 'Pexels Video', site: 'pexels.com/video' },
+    { name: 'Pixabay Video', site: 'pixabay.com/videos' },
+    { name: 'Videvo', site: 'videvo.net' },
+    { name: 'Coverr', site: 'coverr.co' },
+    { name: 'Mixkit', site: 'mixkit.co' },
   ];
 
-  for (const site of freeStockSites) {
+  for (const stock of freeStockSites) {
     for (const query of queries.slice(0, 2)) {
       try {
-        await delay(300);
-        const searchQuery = `${site.searchPattern} ${query}`;
-        const response = await axios.post('https://google.serper.dev/search',
-          { q: searchQuery, num: 15 },
-          { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
-        );
+        const searchResults = await searchSite(stock.site, query, 15);
 
-        for (const item of response.data?.organic || []) {
-          if (isVideoUrl(item.link)) {
+        for (const item of searchResults) {
+          if (isVideoUrl(item.url)) {
             results.push({
-              url: item.link,
+              url: item.url,
               title: item.title,
-              source: site.name,
+              source: stock.name,
               priority: 2,
               license: 'creative_commons',
             });
           }
         }
       } catch (e: any) {
-        console.error(`[Video] Free stock (${site.name}) error: ${e.message}`);
+        console.error(`[Video] Free stock (${stock.name}) error: ${e.message}`);
       }
     }
   }
@@ -221,44 +207,38 @@ async function searchFreeStockVideo(topic: string, queries: string[]) {
   return results;
 }
 
-// 4. Historical Archives (British Pathé, C-SPAN, LOC, AP, Reuters, etc.)
+// 4. Historical Archives
 async function searchHistoricalArchives(topic: string, queries: string[]) {
   console.log('[Video] Searching historical archives...');
   const results: any[] = [];
 
-  const archives = sourcesConfig?.video?.tier3_historical_archives || [
-    { name: 'British Pathé', searchPattern: 'site:britishpathe.com/asset' },
-    { name: 'C-SPAN', searchPattern: 'site:c-span.org/video' },
-    { name: 'Library of Congress', searchPattern: 'site:loc.gov/item film OR video' },
-    { name: 'AP Archive', searchPattern: 'site:aparchive.com/metadata' },
-    { name: 'Reuters Archive', searchPattern: 'site:reuters.com video archive' },
-    { name: 'ITN Source', searchPattern: 'site:itnsource.com' },
-    { name: 'Critical Past', searchPattern: 'site:criticalpast.com' },
-    { name: 'Footage Farm', searchPattern: 'site:footagefarm.com' },
-    { name: 'Historic Films', searchPattern: 'site:historicfilms.com' },
-    { name: 'NBC News Archives', searchPattern: 'site:nbcnewsarchives.com' },
-    { name: 'CBS News Archives', searchPattern: 'site:cbsnews.com/video' },
-    { name: 'BBC Archive', searchPattern: 'site:bbc.com video archive footage' },
-    { name: 'Europeana Video', searchPattern: 'site:europeana.eu video OR film' },
-    { name: 'BFI National Archive', searchPattern: 'site:bfi.org.uk/archive' },
-    { name: 'National Archives', searchPattern: 'site:catalog.archives.gov video OR film' },
+  const archives = [
+    { name: 'British Pathé', site: 'britishpathe.com' },
+    { name: 'C-SPAN', site: 'c-span.org/video' },
+    { name: 'Library of Congress', site: 'loc.gov/item' },
+    { name: 'AP Archive', site: 'aparchive.com' },
+    { name: 'Reuters', site: 'reuters.com/video' },
+    { name: 'ITN Source', site: 'itnsource.com' },
+    { name: 'Critical Past', site: 'criticalpast.com' },
+    { name: 'Footage Farm', site: 'footagefarm.com' },
+    { name: 'Historic Films', site: 'historicfilms.com' },
+    { name: 'NBC Archives', site: 'nbcnewsarchives.com' },
+    { name: 'CBS News', site: 'cbsnews.com/video' },
+    { name: 'BBC Archive', site: 'bbc.com/archive' },
+    { name: 'Europeana', site: 'europeana.eu' },
+    { name: 'BFI', site: 'bfi.org.uk' },
+    { name: 'National Archives', site: 'catalog.archives.gov' },
   ];
 
   for (const archive of archives) {
     for (const query of queries.slice(0, 2)) {
       try {
-        await delay(300);
-        const searchQuery = `${archive.searchPattern} ${query} video OR film OR footage`;
-        const response = await axios.post('https://google.serper.dev/search',
-          { q: searchQuery, num: 15 },
-          { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
-        );
+        const searchResults = await searchSite(archive.site, `${query} video film footage`, 15);
 
-        for (const item of response.data?.organic || []) {
-          // Filter: only include if URL looks like a video page
-          if (isVideoUrl(item.link)) {
+        for (const item of searchResults) {
+          if (isVideoUrl(item.url)) {
             results.push({
-              url: item.link,
+              url: item.url,
               title: item.title,
               source: archive.name,
               priority: 3,
@@ -281,29 +261,24 @@ async function searchNewsDocumentary(topic: string, queries: string[]) {
   console.log('[Video] Searching news & documentary sources...');
   const results: any[] = [];
 
-  const newsSources = sourcesConfig?.video?.tier4_news_documentary || [
-    { name: 'History Channel', searchPattern: 'site:history.com/videos' },
-    { name: 'Documentary Storm', searchPattern: 'site:documentarystorm.com' },
-    { name: 'Top Documentary Films', searchPattern: 'site:topdocumentaryfilms.com' },
-    { name: 'Smithsonian Channel', searchPattern: 'site:smithsonianchannel.com/videos' },
-    { name: 'National Geographic', searchPattern: 'site:nationalgeographic.com/videos' },
-    { name: 'PBS Video', searchPattern: 'site:pbs.org/video' },
+  const newsSources = [
+    { name: 'History Channel', site: 'history.com/videos' },
+    { name: 'Smithsonian', site: 'smithsonianchannel.com' },
+    { name: 'National Geographic', site: 'nationalgeographic.com/videos' },
+    { name: 'PBS', site: 'pbs.org/video' },
+    { name: 'Documentary Storm', site: 'documentarystorm.com' },
+    { name: 'Top Documentary', site: 'topdocumentaryfilms.com' },
   ];
 
   for (const source of newsSources) {
     for (const query of queries.slice(0, 2)) {
       try {
-        await delay(300);
-        const searchQuery = `${source.searchPattern} ${query}`;
-        const response = await axios.post('https://google.serper.dev/search',
-          { q: searchQuery, num: 15 },
-          { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
-        );
+        const searchResults = await searchSite(source.site, query, 15);
 
-        for (const item of response.data?.organic || []) {
-          if (isVideoUrl(item.link)) {
+        for (const item of searchResults) {
+          if (isVideoUrl(item.url)) {
             results.push({
-              url: item.link,
+              url: item.url,
               title: item.title,
               source: source.name,
               priority: 4,
@@ -321,42 +296,37 @@ async function searchNewsDocumentary(topic: string, queries: string[]) {
   return results;
 }
 
-// 6. Stock Footage (Getty, Shutterstock, Pond5, etc.)
+// 6. Stock Footage Sites
 async function searchStockFootage(topic: string, queries: string[]) {
   console.log('[Video] Searching stock footage sites...');
   const results: any[] = [];
 
-  const stockSites = sourcesConfig?.video?.tier5_stock_footage || [
-    { name: 'Getty Images Video', searchPattern: 'site:gettyimages.com/detail/video' },
-    { name: 'Shutterstock Video', searchPattern: 'site:shutterstock.com/video' },
-    { name: 'Pond5', searchPattern: 'site:pond5.com' },
-    { name: 'Artgrid', searchPattern: 'site:artgrid.io' },
-    { name: 'Storyblocks', searchPattern: 'site:storyblocks.com/video' },
+  const stockSites = [
+    { name: 'Getty Video', site: 'gettyimages.com/videos' },
+    { name: 'Shutterstock Video', site: 'shutterstock.com/video' },
+    { name: 'Pond5', site: 'pond5.com' },
+    { name: 'Artgrid', site: 'artgrid.io' },
+    { name: 'Storyblocks', site: 'storyblocks.com/video' },
   ];
 
-  for (const site of stockSites) {
+  for (const stock of stockSites) {
     for (const query of queries.slice(0, 2)) {
       try {
-        await delay(300);
-        const searchQuery = `${site.searchPattern} ${query}`;
-        const response = await axios.post('https://google.serper.dev/search',
-          { q: searchQuery, num: 15 },
-          { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
-        );
+        const searchResults = await searchSite(stock.site, query, 15);
 
-        for (const item of response.data?.organic || []) {
-          if (isVideoUrl(item.link)) {
+        for (const item of searchResults) {
+          if (isVideoUrl(item.url)) {
             results.push({
-              url: item.link,
+              url: item.url,
               title: item.title,
-              source: site.name,
+              source: stock.name,
               priority: 5,
               license: 'commercial',
             });
           }
         }
       } catch (e: any) {
-        console.error(`[Video] Stock (${site.name}) error: ${e.message}`);
+        console.error(`[Video] Stock (${stock.name}) error: ${e.message}`);
       }
     }
   }
@@ -365,31 +335,24 @@ async function searchStockFootage(topic: string, queries: string[]) {
   return results;
 }
 
-// 7. Entire Web (Any website with videos - fallback)
-async function searchEntireWeb(topic: string, queries: string[]) {
-  console.log('[Video] Searching entire web...');
+// 7. General Web Search for Videos
+async function searchWebVideos(topic: string, queries: string[]) {
+  console.log('[Video] Searching general web for videos...');
   const results: any[] = [];
 
-  const excludedSites = ['youtube.com', 'youtu.be', 'tiktok.com', 'facebook.com', 'instagram.com', 'twitter.com', 'x.com', 'vimeo.com'];
-  const exclusions = excludedSites.map(s => `-site:${s}`).join(' ');
+  const excludedDomains = ['youtube.com', 'youtu.be', 'tiktok.com', 'facebook.com', 'instagram.com', 'twitter.com', 'x.com'];
 
   for (const query of queries) {
     try {
-      await delay(300);
-      const searchQuery = `${query} video OR footage OR documentary ${exclusions}`;
-      const response = await axios.post('https://google.serper.dev/search',
-        { q: searchQuery, num: 30 },
-        { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 15000 }
-      );
+      const searchResults = await searchWeb(`${query} video footage documentary -youtube -tiktok`, 40);
 
-      for (const item of response.data?.organic || []) {
-        const domain = new URL(item.link).hostname.replace('www.', '');
-        if (excludedSites.some(s => domain.includes(s))) continue;
+      for (const item of searchResults) {
+        const domain = new URL(item.url).hostname.replace('www.', '');
+        if (excludedDomains.some(d => domain.includes(d))) continue;
 
-        // Only include if URL looks like a video page (not PDFs, docs, etc.)
-        if (isVideoUrl(item.link)) {
+        if (isVideoUrl(item.url)) {
           results.push({
-            url: item.link,
+            url: item.url,
             title: item.title,
             source: domain,
             priority: 6,
@@ -402,7 +365,7 @@ async function searchEntireWeb(topic: string, queries: string[]) {
     }
   }
 
-  console.log(`[Video] Web search found: ${results.length}`);
+  console.log(`[Video] Web videos found: ${results.length}`);
   return results;
 }
 
@@ -420,22 +383,22 @@ app.post('/search', async (req, res) => {
   const searchQueries = queries || [topic];
   console.log(`\n[Video Worker] Starting search for "${topic}"`);
   console.log(`[Video Worker] Queries: ${searchQueries.join(', ')}`);
-  console.log(`[Video Worker] Searching 50+ sources across 6 tiers...`);
+  console.log(`[Video Worker] Using SearXNG (unlimited searches)`);
 
   try {
-    // Search all sources in priority order (parallel for speed)
-    const [archive, wikimedia, freeStock, historical, newsDoc, stockFootage, web] = await Promise.all([
+    // Search all sources in parallel
+    const [archive, searxngVideos, freeStock, historical, newsDoc, stockFootage, webVideos] = await Promise.all([
       searchArchiveOrg(topic, searchQueries),
-      searchWikimedia(topic, searchQueries),
+      searchSearXNGVideos(topic, searchQueries),
       searchFreeStockVideo(topic, searchQueries),
       searchHistoricalArchives(topic, searchQueries),
       searchNewsDocumentary(topic, searchQueries),
       searchStockFootage(topic, searchQueries),
-      searchEntireWeb(topic, searchQueries),
+      searchWebVideos(topic, searchQueries),
     ]);
 
     // Combine and deduplicate
-    const allResults = [...archive, ...wikimedia, ...freeStock, ...historical, ...newsDoc, ...stockFootage, ...web];
+    const allResults = [...archive, ...searxngVideos, ...freeStock, ...historical, ...newsDoc, ...stockFootage, ...webVideos];
     const unique = allResults.filter((item, index, self) =>
       index === self.findIndex(t => t.url === item.url)
     );
@@ -444,7 +407,7 @@ app.post('/search', async (req, res) => {
     unique.sort((a, b) => a.priority - b.priority);
 
     console.log(`[Video Worker] Total unique videos: ${unique.length}`);
-    console.log(`[Video Worker] By tier: Archive.org=${archive.length}, Wikimedia=${wikimedia.length}, FreeStock=${freeStock.length}, Historical=${historical.length}, NewsDoc=${newsDoc.length}, StockFootage=${stockFootage.length}, Web=${web.length}`);
+    console.log(`[Video Worker] Breakdown: Archive=${archive.length}, SearXNG=${searxngVideos.length}, FreeStock=${freeStock.length}, Historical=${historical.length}, NewsDoc=${newsDoc.length}, Stock=${stockFootage.length}, Web=${webVideos.length}`);
 
     // Save to Supabase if projectId provided
     if (projectId) {
@@ -466,7 +429,7 @@ app.post('/search', async (req, res) => {
             },
           });
           saved++;
-        } catch (e: any) { console.error(`[Video] Error: ${e.message}`); }
+        } catch (e: any) { /* skip duplicates */ }
       }
       console.log(`[Video Worker] Saved ${saved} videos to database`);
     }
@@ -477,12 +440,12 @@ app.post('/search', async (req, res) => {
       results: unique,
       breakdown: {
         archive_org: archive.length,
-        wikimedia: wikimedia.length,
+        searxng_videos: searxngVideos.length,
         free_stock: freeStock.length,
         historical_archives: historical.length,
         news_documentary: newsDoc.length,
         stock_footage: stockFootage.length,
-        web_search: web.length,
+        web_search: webVideos.length,
       }
     });
   } catch (error: any) {
@@ -496,14 +459,15 @@ app.get('/health', (req, res) => {
     status: 'ok',
     worker: 'video',
     port: PORT,
-    sources_loaded: !!sourcesConfig,
-    total_sources: sourcesConfig ? '50+' : 'defaults',
+    search_engine: 'SearXNG (self-hosted)',
+    sources: '50+',
   });
 });
 
 app.listen(PORT, () => {
   console.log(`\n========================================`);
   console.log(`  VIDEO WORKER running on port ${PORT}`);
-  console.log(`  Sources: 50+ across 6 tiers`);
+  console.log(`  Search Engine: SearXNG (unlimited)`);
+  console.log(`  Sources: 50+ across 7 categories`);
   console.log(`========================================\n`);
 });
