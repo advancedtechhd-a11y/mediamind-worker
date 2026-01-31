@@ -1,16 +1,13 @@
 // WEB CONTENT WORKER - Standalone Service (Port 3003)
-// Searches ANY website → Takes screenshots using Playwright
+// Searches ANY website → Takes screenshots using Puppeteer
 // News, blogs, databases, forums, reports, etc.
-
-// MUST set browser path BEFORE importing Playwright
-process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH || '/app/.playwright-browsers';
 
 import 'dotenv/config';
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
-import { chromium, Browser } from 'playwright';
+import puppeteer, { Browser } from 'puppeteer';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -30,11 +27,13 @@ let browserError: string | null = null;
 // Initialize browser on startup
 async function initBrowser() {
   if (!browser) {
-    console.log('[WebContent] Launching Playwright browser...');
-    console.log('[WebContent] PLAYWRIGHT_BROWSERS_PATH:', process.env.PLAYWRIGHT_BROWSERS_PATH);
+    console.log('[WebContent] Launching Puppeteer browser...');
+    const execPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    console.log('[WebContent] Using executable:', execPath || 'default');
     try {
-      browser = await chromium.launch({
+      browser = await puppeteer.launch({
         headless: true,
+        executablePath: execPath || undefined,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -64,9 +63,9 @@ async function takeScreenshot(url: string, outputPath: string): Promise<boolean>
     const b = await initBrowser();
     const page = await b.newPage();
 
-    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.setViewport({ width: 1280, height: 800 });
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-    await page.waitForTimeout(2000);
+    await new Promise(r => setTimeout(r, 2000));
 
     await page.screenshot({
       path: outputPath,

@@ -1,27 +1,33 @@
 FROM node:20
 
-# Install ffmpeg and basic deps
-RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+# Install ffmpeg and Chrome dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    chromium \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libdrm2 \
+    libgbm1 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libxkbcommon0 \
+    libxshmfence1 \
+    xdg-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Tell Puppeteer to use system Chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 WORKDIR /app
-
-# Set browser path so it persists
-ENV PLAYWRIGHT_BROWSERS_PATH=/app/.playwright-browsers
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Install dependencies (Puppeteer won't download Chrome due to env var)
 RUN npm install
-
-# Install Playwright system dependencies first
-RUN npx playwright install-deps chromium
-
-# Install browser to specific path and verify
-RUN npx playwright install chromium && \
-    echo "Browser installed to:" && \
-    ls -la /app/.playwright-browsers/ && \
-    find /app/.playwright-browsers -name "chrome*" -type f
 
 # Copy source
 COPY . .
