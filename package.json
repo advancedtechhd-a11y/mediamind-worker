@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "postinstall": "npx playwright install --with-deps chromium",
     "dev": "tsx watch src/orchestrator.ts",
     "build": "tsc",
     "start": "sh start-workers.sh",
