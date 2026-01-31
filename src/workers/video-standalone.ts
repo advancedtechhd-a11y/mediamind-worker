@@ -17,6 +17,40 @@ const SERPER_API_KEY = process.env.SERPER_API_KEY;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Video file extensions to look for
+const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.ogv', '.avi', '.mov', '.mkv', '.m4v'];
+const NON_VIDEO_EXTENSIONS = ['.pdf', '.txt', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif', '.html', '.htm'];
+
+// Check if URL is likely a video
+function isVideoUrl(url: string): boolean {
+  const lowerUrl = url.toLowerCase();
+
+  // Exclude non-video files
+  if (NON_VIDEO_EXTENSIONS.some(ext => lowerUrl.endsWith(ext))) {
+    return false;
+  }
+
+  // Include if has video extension
+  if (VIDEO_EXTENSIONS.some(ext => lowerUrl.includes(ext))) {
+    return true;
+  }
+
+  // Include known video platforms/patterns
+  const videoPatterns = [
+    'britishpathe.com/asset/',
+    'c-span.org/video/',
+    'aparchive.com/metadata/',
+    '/video/',
+    '/watch/',
+    '/play/',
+    '/embed/',
+    'archive.org/details/',
+    'commons.wikimedia.org/wiki/File:',
+  ];
+
+  return videoPatterns.some(pattern => lowerUrl.includes(pattern));
+}
+
 // ============================================
 // SEARCH SOURCES (Priority Order)
 // ============================================
@@ -72,7 +106,8 @@ async function searchWikimedia(topic: string, queries: string[]) {
   for (const query of queries) {
     try {
       await delay(300);
-      const searchQuery = `site:commons.wikimedia.org ${query} video OR film`;
+      // Search specifically for video files on Wikimedia
+      const searchQuery = `site:commons.wikimedia.org/wiki/File: ${query} filetype:ogv OR filetype:webm OR filetype:mp4`;
       console.log(`[Video] Wikimedia query: ${searchQuery}`);
       const response = await axios.post('https://google.serper.dev/search',
         { q: searchQuery, num: 20 },
@@ -80,12 +115,16 @@ async function searchWikimedia(topic: string, queries: string[]) {
       );
 
       for (const item of response.data?.organic || []) {
-        results.push({
-          url: item.link,
-          title: item.title,
-          source: 'wikimedia',
-          priority: 2,
-        });
+        // Only include actual video file pages
+        const url = item.link.toLowerCase();
+        if (url.includes('.ogv') || url.includes('.webm') || url.includes('.mp4') || url.includes('file:')) {
+          results.push({
+            url: item.link,
+            title: item.title,
+            source: 'wikimedia',
+            priority: 2,
+          });
+        }
       }
     } catch (e: any) {
       console.error(`[Video] Wikimedia error: ${e.message}`);
@@ -103,29 +142,32 @@ async function searchHistoricalArchives(topic: string, queries: string[]) {
   const results: any[] = [];
 
   const archives = [
-    { site: 'britishpathe.com', name: 'British Pathé' },
+    { site: 'britishpathe.com/asset', name: 'British Pathé' },
     { site: 'c-span.org/video', name: 'C-SPAN' },
-    { site: 'loc.gov', name: 'Library of Congress' },
-    { site: 'aparchive.com', name: 'AP Archive' },
+    { site: 'loc.gov/item', name: 'Library of Congress' },  // /item has actual media, not /resource
+    { site: 'aparchive.com/metadata', name: 'AP Archive' },
   ];
 
   for (const archive of archives) {
     for (const query of queries.slice(0, 2)) {
       try {
         await delay(300);
-        const searchQuery = `site:${archive.site} ${query}`;
+        const searchQuery = `site:${archive.site} ${query} video OR film OR footage`;
         const response = await axios.post('https://google.serper.dev/search',
           { q: searchQuery, num: 15 },
           { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
         );
 
         for (const item of response.data?.organic || []) {
-          results.push({
-            url: item.link,
-            title: item.title,
-            source: archive.name,
-            priority: 3,
-          });
+          // Filter: only include if URL looks like a video page
+          if (isVideoUrl(item.link)) {
+            results.push({
+              url: item.link,
+              title: item.title,
+              source: archive.name,
+              priority: 3,
+            });
+          }
         }
       } catch (e: any) {
         console.error(`[Video] Archive (${archive.name}) error: ${e.message}`);
@@ -159,12 +201,15 @@ async function searchEntireWeb(topic: string, queries: string[]) {
         const domain = new URL(item.link).hostname.replace('www.', '');
         if (excludedSites.some(s => domain.includes(s))) continue;
 
-        results.push({
-          url: item.link,
-          title: item.title,
-          source: domain,
-          priority: 4,
-        });
+        // Only include if URL looks like a video page (not PDFs, docs, etc.)
+        if (isVideoUrl(item.link)) {
+          results.push({
+            url: item.link,
+            title: item.title,
+            source: domain,
+            priority: 4,
+          });
+        }
       }
     } catch (e: any) {
       console.error(`[Video] Web search error: ${e.message}`);
