@@ -384,15 +384,23 @@ app.post('/search', async (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', worker: 'webcontent', port: PORT });
+  res.json({
+    status: browser ? 'ok' : 'degraded',
+    worker: 'webcontent',
+    port: PORT,
+    browser_ready: !!browser
+  });
 });
 
-// Initialize browser on startup
-initBrowser().then(() => {
-  app.listen(PORT, () => {
-    console.log(`\n========================================`);
-    console.log(`  WEB CONTENT WORKER running on port ${PORT}`);
-    console.log(`========================================\n`);
+// Start server first, then try to initialize browser
+app.listen(PORT, () => {
+  console.log(`\n========================================`);
+  console.log(`  WEB CONTENT WORKER running on port ${PORT}`);
+  console.log(`========================================\n`);
+
+  // Initialize browser after server starts
+  initBrowser().catch(err => {
+    console.error('[WebContent] Browser initialization failed, will retry on first request');
   });
 });
 
