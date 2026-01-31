@@ -5,6 +5,9 @@ RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
+# Set browser path so it persists
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/.playwright-browsers
+
 # Copy package files
 COPY package*.json ./
 
@@ -14,8 +17,11 @@ RUN npm install
 # Install Playwright system dependencies first
 RUN npx playwright install-deps chromium
 
-# Then install the browser
-RUN npx playwright install chromium
+# Install browser to specific path and verify
+RUN npx playwright install chromium && \
+    echo "Browser installed to:" && \
+    ls -la /app/.playwright-browsers/ && \
+    find /app/.playwright-browsers -name "chrome*" -type f
 
 # Copy source
 COPY . .
