@@ -23,6 +23,25 @@ const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SE
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Check if a result is relevant to the topic
+function isRelevant(title: string, topic: string): boolean {
+  if (!title || !topic) return false;
+
+  const titleLower = title.toLowerCase();
+  const topicLower = topic.toLowerCase();
+
+  // Extract keywords from topic (words > 3 chars)
+  const keywords = topicLower.split(/\s+/).filter(word => word.length > 3);
+
+  // Check if at least one keyword appears in the title
+  const matchCount = keywords.filter(keyword => titleLower.includes(keyword)).length;
+
+  // Require at least 1 keyword match, or 30% of keywords for longer topics
+  const minMatches = Math.max(1, Math.floor(keywords.length * 0.3));
+
+  return matchCount >= minMatches;
+}
+
 // Load sources config
 let sourcesConfig: any = null;
 try {
@@ -148,7 +167,8 @@ async function searchSearXNGVideos(topic: string, queries: string[]) {
       const searchResults = await searchVideos(`${query} historical footage documentary`, 50);
 
       for (const item of searchResults) {
-        if (isVideoUrl(item.url)) {
+        // RELEVANCE CHECK: Only include if title matches topic
+        if (isVideoUrl(item.url) && isRelevant(item.title, topic)) {
           results.push({
             url: item.url,
             title: item.title,
@@ -187,7 +207,8 @@ async function searchFreeStockVideo(topic: string, queries: string[]) {
         const searchResults = await searchSite(stock.site, query, 15);
 
         for (const item of searchResults) {
-          if (isVideoUrl(item.url)) {
+          // RELEVANCE CHECK for stock sites
+          if (isVideoUrl(item.url) && isRelevant(item.title, topic)) {
             results.push({
               url: item.url,
               title: item.title,
@@ -315,7 +336,8 @@ async function searchStockFootage(topic: string, queries: string[]) {
         const searchResults = await searchSite(stock.site, query, 15);
 
         for (const item of searchResults) {
-          if (isVideoUrl(item.url)) {
+          // RELEVANCE CHECK for stock footage
+          if (isVideoUrl(item.url) && isRelevant(item.title, topic)) {
             results.push({
               url: item.url,
               title: item.title,
@@ -340,17 +362,18 @@ async function searchWebVideos(topic: string, queries: string[]) {
   console.log('[Video] Searching general web for videos...');
   const results: any[] = [];
 
-  const excludedDomains = ['youtube.com', 'youtu.be', 'tiktok.com', 'facebook.com', 'instagram.com', 'twitter.com', 'x.com'];
+  const excludedDomains = ['youtube.com', 'youtu.be', 'tiktok.com', 'facebook.com', 'instagram.com', 'twitter.com', 'x.com', 'dailymotion.com'];
 
   for (const query of queries) {
     try {
-      const searchResults = await searchWeb(`${query} video footage documentary -youtube -tiktok`, 40);
+      const searchResults = await searchWeb(`${query} video footage documentary -youtube -tiktok -dailymotion`, 40);
 
       for (const item of searchResults) {
         const domain = new URL(item.url).hostname.replace('www.', '');
         if (excludedDomains.some(d => domain.includes(d))) continue;
 
-        if (isVideoUrl(item.url)) {
+        // RELEVANCE CHECK: Only include if title matches topic
+        if (isVideoUrl(item.url) && isRelevant(item.title, topic)) {
           results.push({
             url: item.url,
             title: item.title,
